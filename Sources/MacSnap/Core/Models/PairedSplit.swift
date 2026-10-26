@@ -173,6 +173,24 @@ public final class PairedSplit: @unchecked Sendable {
         }
     }
 
+    /// Updates only the split ratio based on cursor drag with gentle magnetic snapping,
+    /// without triggering live AX window resizes to prevent third-party app stutter.
+    public func updateRatioOnly(from cursorCoordinate: CGFloat) {
+        var rawRatio: CGFloat
+
+        switch orientation {
+        case .horizontal:
+            let relativeX = cursorCoordinate - visibleFrame.origin.x
+            rawRatio = relativeX / visibleFrame.width
+        case .vertical:
+            let relativeY = cursorCoordinate - visibleFrame.origin.y
+            let bottomRatio = relativeY / visibleFrame.height
+            rawRatio = 1.0 - bottomRatio
+        }
+
+        self.ratio = applyMagneticSnap(rawRatio)
+    }
+
     /// Updates the split ratio based on cursor drag with gentle magnetic snapping.
     public func updateRatioFromCursor(cursorCoordinate: CGFloat, primaryScreenHeight: CGFloat) {
         var rawRatio: CGFloat

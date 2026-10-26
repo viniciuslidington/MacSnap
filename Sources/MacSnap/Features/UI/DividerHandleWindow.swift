@@ -175,20 +175,29 @@ final class DividerCustomView: NSView {
             ? NSColor(white: 1.0, alpha: 0.75)
             : NSColor(white: 0.25, alpha: 0.65)
 
+        // Inset so the divider line stops before the window corner radiuses curve away
+        let cornerInset: CGFloat = 20.0
+
         if orientation == .horizontal {
             let lineX = bounds.midX
             let linePath = NSBezierPath()
-            linePath.move(to: CGPoint(x: lineX, y: 0))
-            linePath.line(to: CGPoint(x: lineX, y: bounds.height))
+            let startY = cornerInset
+            let endY = max(cornerInset, bounds.height - cornerInset)
+            linePath.move(to: CGPoint(x: lineX, y: startY))
+            linePath.line(to: CGPoint(x: lineX, y: endY))
             linePath.lineWidth = 1.5
+            linePath.lineCapStyle = .round
             activeLineColor.setStroke()
             linePath.stroke()
         } else {
             let lineY = bounds.midY
             let linePath = NSBezierPath()
-            linePath.move(to: CGPoint(x: 0, y: lineY))
-            linePath.line(to: CGPoint(x: bounds.width, y: lineY))
+            let startX = cornerInset
+            let endX = max(cornerInset, bounds.width - cornerInset)
+            linePath.move(to: CGPoint(x: startX, y: lineY))
+            linePath.line(to: CGPoint(x: endX, y: lineY))
             linePath.lineWidth = 1.5
+            linePath.lineCapStyle = .round
             activeLineColor.setStroke()
             linePath.stroke()
         }

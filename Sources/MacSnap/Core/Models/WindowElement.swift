@@ -22,6 +22,24 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
         return titleStr
     }
 
+    /// Running application instance representing the owning process.
+    public var runningApplication: NSRunningApplication? {
+        NSRunningApplication(processIdentifier: pid)
+    }
+
+    /// Application icon image, falling back to standard application bundle icon.
+    public var appIcon: NSImage? {
+        if let icon = runningApplication?.icon {
+            return icon
+        }
+        return NSWorkspace.shared.icon(for: .applicationBundle)
+    }
+
+    /// Application localized display name.
+    public var appName: String? {
+        runningApplication?.localizedName ?? title ?? "App"
+    }
+
     /// Returns the window frame in Accessibility API coordinates.
     public var axFrame: CGRect? {
         var posValue: CFTypeRef?

@@ -425,4 +425,27 @@ struct SnapGeometryTests {
         divider.onDividerReleased?()
         #expect(dragReleasedCalled)
     }
+
+    @Test func testPairedSplitUpdateRatioOnly() {
+        let visibleFrame = CGRect(x: 0, y: 0, width: 2000, height: 1000)
+        let dummyLeft = WindowElement(element: AXUIElementCreateSystemWide(), pid: ProcessInfo.processInfo.processIdentifier)
+        let dummyRight = WindowElement(element: AXUIElementCreateSystemWide(), pid: ProcessInfo.processInfo.processIdentifier)
+        let pair = PairedSplit(firstWindow: dummyLeft, secondWindow: dummyRight, orientation: .horizontal, visibleFrame: visibleFrame, ratio: 0.5)
+
+        // updateRatioOnly should update ratio without errors
+        pair.updateRatioOnly(from: 800) // 800 / 2000 = 0.40
+        #expect(abs(pair.ratio - 0.40) < 0.001)
+
+        // Test fallback app metadata on WindowElement
+        #expect(dummyLeft.appIcon != nil)
+        #expect(dummyLeft.appName != nil)
+
+        // If a GUI app like Finder is running, test runningApplication resolution
+        if let finder = NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.finder").first {
+            let finderElem = WindowElement(element: AXUIElementCreateSystemWide(), pid: finder.processIdentifier)
+            #expect(finderElem.runningApplication != nil)
+            #expect(finderElem.appIcon != nil)
+            #expect(finderElem.appName == "Finder")
+        }
+    }
 }

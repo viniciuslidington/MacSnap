@@ -67,17 +67,32 @@ public final class PairedResizeManager {
             guard pair.isValid else { return }
             guard let screen = self.screenService.screens.first(where: { $0.displayID == state.screenID }) else { return }
             let (firstRect, secondRect) = pair.calculateFrames()
-            state.resizeOverlay.present(on: screen, firstRect: firstRect, secondRect: secondRect, animated: true)
+
+            let firstIcon = pair.firstWindow.appIcon
+            let secondIcon = pair.secondWindow.appIcon
+            let firstName = pair.firstWindow.appName
+            let secondName = pair.secondWindow.appName
+
+            state.resizeOverlay.present(
+                on: screen,
+                firstRect: firstRect,
+                secondRect: secondRect,
+                firstAppIcon: firstIcon,
+                secondAppIcon: secondIcon,
+                firstAppName: firstName,
+                secondAppName: secondName,
+                animated: true
+            )
         }
 
-        state.dividerWindow.onDividerDragged = { [weak self, weak state] cursorCoordinate in
-            guard let self = self, let state = state, let pair = state.pair else { return }
+        state.dividerWindow.onDividerDragged = { [weak state] cursorCoordinate in
+            guard let state = state, let pair = state.pair else { return }
             guard pair.isValid else {
                 state.clear()
                 return
             }
-            let primaryHeight = self.screenService.primaryScreenHeight
-            pair.updateRatioFromCursor(cursorCoordinate: cursorCoordinate, primaryScreenHeight: primaryHeight)
+            // Update ratio smoothly without firing AXUIElement resizes during drag to prevent app stutter
+            pair.updateRatioOnly(from: cursorCoordinate)
             state.dividerWindow.update(for: pair)
 
             let (firstRect, secondRect) = pair.calculateFrames()
@@ -88,7 +103,9 @@ public final class PairedResizeManager {
             guard let self = self, let state = state, let pair = state.pair else { return }
             let primaryHeight = self.screenService.primaryScreenHeight
             state.resizeOverlay.dismiss(animated: true)
+            // Apply final split to actual windows once on release
             pair.applyCurrentSplit(primaryScreenHeight: primaryHeight)
+            state.dividerWindow.update(for: pair)
         }
     }
 
