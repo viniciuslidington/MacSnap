@@ -71,8 +71,9 @@ public final class SnapLayoutBarWindow: NSPanel {
     public func checkHover(at globalPoint: CGPoint) -> SnapZone? {
         guard isPresented else { return nil }
 
-        // Converte o ponto do mouse para coordenadas locais da view
-        let localPoint = self.contentView?.convert(globalPoint, from: nil) ?? .zero
+        // Converte corretamente de Coordenadas de Tela -> Coordenadas da Janela -> Coordenadas da View
+        let windowPoint = self.convertPoint(fromScreen: globalPoint)
+        let localPoint = self.contentView?.convert(windowPoint, from: nil) ?? .zero
         let zone = barView.updateHover(at: localPoint)
         return zone
     }
@@ -210,7 +211,7 @@ final class SnapLayoutBarView: NSView {
 
         // Desenha cada slot com estado normal ou destacado
         for slot in slots {
-            let isHovered = (slot.zone == hoveredZone && slot.rect.contains(convert(NSEvent.mouseLocation, from: nil)))
+            let isHovered = (slot.zone == hoveredZone)
             let slotPath = NSBezierPath(roundedRect: slot.rect, xRadius: 6, yRadius: 6)
 
             if isHovered {

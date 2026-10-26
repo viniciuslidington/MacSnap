@@ -111,8 +111,9 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
         // 1. MONITOR VERTICAL: Tratamento especial com 50/50 no topo/base e 1/3 nas laterais
         if isPortrait {
-            let topZoneThreshold: CGFloat = 130.0
-            let isApproachingTop = point.y >= visibleFrame.maxY - topZoneThreshold
+            let topZoneThreshold: CGFloat = 160.0
+            let isInsideBar = snapLayoutBar.frame.insetBy(dx: -20, dy: -20).contains(point)
+            let isApproachingTop = (point.y >= visibleFrame.maxY - topZoneThreshold) || isInsideBar
 
             if isApproachingTop {
                 // Abre a barra flutuante com layouts otimizados para monitores verticais
