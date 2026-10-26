@@ -1,6 +1,6 @@
 import Cocoa
 
-/// Gerencia janelas emparelhadas lado a lado e o divisor interativo central.
+/// Gerencia janelas emparelhadas lado a lado (horizontal) ou empilhadas (vertical) e o divisor interativo central.
 @MainActor
 public final class PairedResizeManager {
     public static let shared = PairedResizeManager()
@@ -9,68 +9,117 @@ public final class PairedResizeManager {
     private let dividerWindow = DividerHandleWindow()
     private let screenService: ScreenServiceProtocol
 
+    // Histórico recente para permitir emparelhamento dinâmico
+    private weak var recentLeftWindow: WindowElement?
+    private weak var recentRightWindow: WindowElement?
+    private weak var recentTopWindow: WindowElement?
+    private weak var recentBottomWindow: WindowElement?
+
     public init(screenService: ScreenServiceProtocol = ScreenService.shared) {
         self.screenService = screenService
         setupDividerCallbacks()
     }
 
     private func setupDividerCallbacks() {
-        dividerWindow.onDividerDragged = { [weak self] currentMouseX in
+        dividerWindow.onDividerDragged = { [weak self] cursorCoordinate in
             guard let self = self, let pair = self.activePair else { return }
             let primaryHeight = self.screenService.primaryScreenHeight
-            pair.updateRatioFromDividerX(currentMouseX, primaryScreenHeight: primaryHeight)
-            self.dividerWindow.updatePosition(dividerX: pair.dividerX, visibleFrame: pair.visibleFrame)
+            pair.updateRatioFromCursor(cursorCoordinate: cursorCoordinate, primaryScreenHeight: primaryHeight)
+            self.dividerWindow.update(for: pair)
         }
 
         dividerWindow.onDividerReleased = {
-            // Arraste finalizado; o estado das duas janelas foi atualizado
+            // Arraste finalizado; proporção salva
         }
     }
 
-    /// Registra uma nova janela que acabou de sofrer snap e tenta emparelhar com outra já posicionada.
+    /// Registra uma nova janela que sofreu snap e ativa o divisor caso haja uma parceira oposta.
     public func registerSnap(window: WindowElement, zone: SnapZone, screen: NSScreen) {
         let visibleFrame = screen.visibleFrame
 
         switch zone {
+        // 1. Emparelhamento Horizontal (Lado a Lado)
         case .leftHalf:
-            if let existingRight = activePair?.rightWindow {
-                // Já existia uma na direita, atualiza o par
-                let newPair = PairedSplit(
-                    leftWindow: window,
-                    rightWindow: existingRight,
+            recentLeftWindow = window
+            if let right = recentRightWindow {
+                let pair = PairedSplit(
+                    firstWindow: window,
+                    secondWindow: right,
+                    orientation: .horizontal,
                     visibleFrame: visibleFrame,
                     ratio: activePair?.ratio ?? 0.5
                 )
-                self.activePair = newPair
-                showDivider(for: newPair)
-            } else {
-                // Salva temporariamente como par parcial (aguardando a da direita)
-                // Se houver uma janela na direita sob o ponto médio, poderíamos detectá-la
+                self.activePair = pair
+                showDivider(for: pair)
             }
 
         case .rightHalf:
-            if let existingLeft = activePair?.leftWindow {
-                let newPair = PairedSplit(
-                    leftWindow: existingLeft,
-                    rightWindow: window,
+            recentRightWindow = window
+            if let left = recentLeftWindow {
+                let pair = PairedSplit(
+                    firstWindow: left,
+                    secondWindow: window,
+                    orientation: .horizontal,
                     visibleFrame: visibleFrame,
                     ratio: activePair?.ratio ?? 0.5
                 )
-                self.activePair = newPair
-                showDivider(for: newPair)
+                self.activePair = pair
+                showDivider(for: pair)
             }
 
+        // 2. Emparelhamento Vertical (Topo e Base - Ideal para Monitor Vertical)
+        case .topHalf:
+            recentTopWindow = window
+            if let bottom = recentBottomWindow {
+                let pair = PairedSplit(
+                    firstWindow: window,
+                    secondWindow: bottom,
+                    orientation: .vertical,
+                    visibleFrame: visibleFrame,
+                    ratio: activePair?.ratio ?? 0.5
+                )
+                self.activePair = pair
+                showDivider(for: pair)
+            }
+
+        case .bottomHalf:
+            recentBottomWindow = window
+            if let top = recentTopWindow {
+                let pair = PairedSplit(
+                    firstWindow: top,
+                    secondWindow: window,
+                    orientation: .vertical,
+                    visibleFrame: visibleFrame,
+                    ratio: activePair?.ratio ?? 0.5
+                )
+                self.activePair = pair
+                showDivider(for: pair)
+            }
+
+        case .maximize:
+            clearPairing()
+            recentLeftWindow = nil
+            recentRightWindow = nil
+            recentTopWindow = nil
+            recentBottomWindow = nil
+
         default:
-            // Qualquer outro snap (maximizar, cantos) desfaz o emparelhamento lateral
             clearPairing()
         }
     }
 
     /// Força o emparelhamento explícito de duas janelas conhecidas.
-    public func pair(left: WindowElement, right: WindowElement, on screen: NSScreen, ratio: CGFloat = 0.5) {
+    public func pair(
+        first: WindowElement,
+        second: WindowElement,
+        orientation: SplitOrientation,
+        on screen: NSScreen,
+        ratio: CGFloat = 0.5
+    ) {
         let pair = PairedSplit(
-            leftWindow: left,
-            rightWindow: right,
+            firstWindow: first,
+            secondWindow: second,
+            orientation: orientation,
             visibleFrame: screen.visibleFrame,
             ratio: ratio
         )
@@ -81,7 +130,7 @@ public final class PairedResizeManager {
     }
 
     private func showDivider(for pair: PairedSplit) {
-        dividerWindow.updatePosition(dividerX: pair.dividerX, visibleFrame: pair.visibleFrame)
+        dividerWindow.update(for: pair)
     }
 
     /// Remove a barra divisória e desfaz o vínculo de emparelhamento ativo.

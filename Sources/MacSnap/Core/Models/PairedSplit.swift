@@ -2,61 +2,168 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-/// Representa um par de janelas emparelhadas lado a lado (estilo Windows Snap Assist).
-/// Controla o divisor central e o cálculo simultâneo de redimensionamento de ambas as janelas.
+/// Orientação da divisão entre as duas janelas emparelhadas.
+public enum SplitOrientation: Sendable {
+    case horizontal // Janelas lado a lado (Esquerda e Direita)
+    case vertical   // Janelas empilhadas (Topo e Base, essencial para monitores verticais)
+}
+
+/// Representa um par de janelas emparelhadas (estilo Windows Snap Assist).
+/// Suporta tanto divisões horizontais (Esquerda/Direita) quanto verticais (Topo/Base),
+/// com atração magnética em proporções comuns (50/50, 33/67 e 67/33).
 public final class PairedSplit: @unchecked Sendable {
-    public let leftWindow: WindowElement
-    public let rightWindow: WindowElement
+    public let firstWindow: WindowElement   // Janela da Esquerda ou do Topo
+    public let secondWindow: WindowElement  // Janela da Direita ou da Base
+    public let orientation: SplitOrientation
     public var visibleFrame: CGRect
-    
-    /// Proporção da largura ocupada pela janela esquerda (entre 0.15 e 0.85).
-    /// Padrão é 0.5 (divisão 50/50).
+
+    /// Proporção do espaço ocupado pela primeira janela (entre 0.15 e 0.85).
+    /// - Para horizontal: proporção da largura da janela esquerda.
+    /// - Para vertical: proporção da altura da janela do topo.
     public var ratio: CGFloat {
         didSet {
             ratio = min(max(ratio, 0.15), 0.85)
         }
     }
 
-    public init(leftWindow: WindowElement, rightWindow: WindowElement, visibleFrame: CGRect, ratio: CGFloat = 0.5) {
-        self.leftWindow = leftWindow
-        self.rightWindow = rightWindow
+    public init(
+        firstWindow: WindowElement,
+        secondWindow: WindowElement,
+        orientation: SplitOrientation = .horizontal,
+        visibleFrame: CGRect,
+        ratio: CGFloat = 0.5
+    ) {
+        self.firstWindow = firstWindow
+        self.secondWindow = secondWindow
+        self.orientation = orientation
         self.visibleFrame = visibleFrame
         self.ratio = min(max(ratio, 0.15), 0.85)
     }
 
-    /// Calcula os retângulos em coordenadas Cocoa para a janela da esquerda e da direita.
-    public func calculateFrames() -> (left: CGRect, right: CGRect) {
-        let totalWidth = visibleFrame.width
-        let height = visibleFrame.height
+    // Compatibilidade com inicializador anterior (left/right)
+    public convenience init(
+        leftWindow: WindowElement,
+        rightWindow: WindowElement,
+        visibleFrame: CGRect,
+        ratio: CGFloat = 0.5
+    ) {
+        self.init(
+            firstWindow: leftWindow,
+            secondWindow: rightWindow,
+            orientation: .horizontal,
+            visibleFrame: visibleFrame,
+            ratio: ratio
+        )
+    }
+
+    public var leftWindow: WindowElement { firstWindow }
+    public var rightWindow: WindowElement { secondWindow }
+    public var topWindow: WindowElement { firstWindow }
+    public var bottomWindow: WindowElement { secondWindow }
+
+    /// Calcula os retângulos em coordenadas Cocoa para a primeira e segunda janela.
+    public func calculateFrames() -> (first: CGRect, second: CGRect) {
+        let x = visibleFrame.origin.x
         let y = visibleFrame.origin.y
-        let startX = visibleFrame.origin.x
+        let width = visibleFrame.width
+        let height = visibleFrame.height
 
-        let leftWidth = (totalWidth * ratio).rounded()
-        let rightWidth = totalWidth - leftWidth
+        switch orientation {
+        case .horizontal:
+            let leftWidth = (width * ratio).rounded()
+            let rightWidth = width - leftWidth
+            let leftRect = CGRect(x: x, y: y, width: leftWidth, height: height)
+            let rightRect = CGRect(x: x + leftWidth, y: y, width: rightWidth, height: height)
+            return (leftRect, rightRect)
 
-        let leftRect = CGRect(x: startX, y: y, width: leftWidth, height: height)
-        let rightRect = CGRect(x: startX + leftWidth, y: y, width: rightWidth, height: height)
-
-        return (leftRect, rightRect)
+        case .vertical:
+            let bottomHeight = (height * (1.0 - ratio)).rounded()
+            let topHeight = height - bottomHeight
+            // No Cocoa, a janela da base começa em y, e a do topo começa em y + bottomHeight
+            let bottomRect = CGRect(x: x, y: y, width: width, height: bottomHeight)
+            let topRect = CGRect(x: x, y: y + bottomHeight, width: width, height: topHeight)
+            return (topRect, bottomRect)
+        }
     }
 
-    /// Posição X atual da linha divisória central em coordenadas Cocoa.
-    public var dividerX: CGFloat {
-        return visibleFrame.origin.x + (visibleFrame.width * ratio)
+    /// Posição do divisor central:
+    /// - Se horizontal, retorna a coordenada X da linha divisória.
+    /// - Se vertical, retorna a coordenada Y da linha divisória.
+    public var dividerPosition: CGFloat {
+        switch orientation {
+        case .horizontal:
+            return visibleFrame.origin.x + (visibleFrame.width * ratio)
+        case .vertical:
+            // A linha entre base e topo fica na altura de bottomHeight
+            return visibleFrame.origin.y + (visibleFrame.height * (1.0 - ratio))
+        }
     }
 
-    /// Atualiza as duas janelas simultaneamente com a proporção atual.
+    public var dividerX: CGFloat { dividerPosition }
+    public var dividerY: CGFloat { dividerPosition }
+
+    /// Retângulo do divisor para posicionar a janela de manuseio.
+    public var dividerFrame: CGRect {
+        let handleBreadth: CGFloat = 16.0
+        switch orientation {
+        case .horizontal:
+            return CGRect(
+                x: dividerPosition - (handleBreadth / 2.0),
+                y: visibleFrame.origin.y,
+                width: handleBreadth,
+                height: visibleFrame.height
+            )
+        case .vertical:
+            return CGRect(
+                x: visibleFrame.origin.x,
+                y: dividerPosition - (handleBreadth / 2.0),
+                width: visibleFrame.width,
+                height: handleBreadth
+            )
+        }
+    }
+
+    /// Aplica as proporções atuais às duas janelas simultaneamente.
     public func applyCurrentSplit(primaryScreenHeight: CGFloat) {
-        let (leftRect, rightRect) = calculateFrames()
-        leftWindow.setCocoaFrame(leftRect, primaryScreenHeight: primaryScreenHeight)
-        rightWindow.setCocoaFrame(rightRect, primaryScreenHeight: primaryScreenHeight)
+        let (firstRect, secondRect) = calculateFrames()
+        firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
+        secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
     }
 
-    /// Atualiza a proporção com base em uma nova coordenada X do cursor na tela.
-    public func updateRatioFromDividerX(_ currentX: CGFloat, primaryScreenHeight: CGFloat) {
-        let relativeX = currentX - visibleFrame.origin.x
-        let newRatio = relativeX / visibleFrame.width
-        self.ratio = newRatio
+    /// Atualiza a proporção com base no arraste do cursor com atração magnética suave.
+    public func updateRatioFromCursor(cursorCoordinate: CGFloat, primaryScreenHeight: CGFloat) {
+        var rawRatio: CGFloat
+
+        switch orientation {
+        case .horizontal:
+            let relativeX = cursorCoordinate - visibleFrame.origin.x
+            rawRatio = relativeX / visibleFrame.width
+        case .vertical:
+            let relativeY = cursorCoordinate - visibleFrame.origin.y
+            let bottomRatio = relativeY / visibleFrame.height
+            rawRatio = 1.0 - bottomRatio
+        }
+
+        self.ratio = applyMagneticSnap(rawRatio)
         applyCurrentSplit(primaryScreenHeight: primaryScreenHeight)
+    }
+
+    /// Mantém compatibilidade com chamadas horizontais anteriores.
+    public func updateRatioFromDividerX(_ currentX: CGFloat, primaryScreenHeight: CGFloat) {
+        updateRatioFromCursor(cursorCoordinate: currentX, primaryScreenHeight: primaryScreenHeight)
+    }
+
+    /// Atração magnética suave em 50/50 (0.5), 33/67 (0.333) e 67/33 (0.667).
+    private func applyMagneticSnap(_ raw: CGFloat) -> CGFloat {
+        let magneticTolerance: CGFloat = 0.035 // 3.5% de alcance magnético
+
+        if abs(raw - 0.50) <= magneticTolerance {
+            return 0.50
+        } else if abs(raw - (1.0 / 3.0)) <= magneticTolerance {
+            return 1.0 / 3.0
+        } else if abs(raw - (2.0 / 3.0)) <= magneticTolerance {
+            return 2.0 / 3.0
+        }
+        return raw
     }
 }

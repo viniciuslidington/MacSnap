@@ -109,7 +109,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
         var detectedZone: SnapZone?
 
-        // 1. MONITOR VERTICAL: Tratamento especial no topo
+        // 1. MONITOR VERTICAL: Tratamento especial com 50/50 no topo/base e 1/3 nas laterais
         if isPortrait {
             let topZoneThreshold: CGFloat = 130.0
             let isApproachingTop = point.y >= visibleFrame.maxY - topZoneThreshold
@@ -122,26 +122,30 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
                 if let hoveredBarZone = snapLayoutBar.checkHover(at: point) {
                     detectedZone = hoveredBarZone
                 } else if isTop {
-                    // Se encostou na borda superior fora dos botões:
-                    // Esquerda do topo = Metade Superior, Direita do topo = 2/3 Superior
-                    if point.x < visibleFrame.midX {
-                        detectedZone = .topHalf
-                    } else {
-                        detectedZone = .topTwoThirds
-                    }
+                    // Regra: Vértices superiores e borda superior padronizados em 50/50 (Metade Superior)
+                    detectedZone = .topHalf
                 }
             } else {
                 snapLayoutBar.dismiss()
             }
 
-            // Ações laterais em monitor vertical
+            // Ações nas outras bordas do monitor vertical
             if detectedZone == nil {
-                if isLeft {
-                    detectedZone = isNearTop ? .topHalf : (isNearBottom ? .bottomHalf : .leftHalf)
-                } else if isRight {
-                    detectedZone = isNearTop ? .topTwoThirds : (isNearBottom ? .bottomThird : .rightHalf)
-                } else if isBottom {
+                if isBottom {
+                    // Regra: Vértices inferiores e borda inferior padronizados em 50/50 (Metade Inferior)
                     detectedZone = .bottomHalf
+                } else if isLeft || isRight {
+                    // Regra: Bordas laterais sugerem a divisão em 1/3 de acordo com a altura do cursor
+                    let relativeY = point.y - visibleFrame.minY
+                    let thirdHeight = visibleFrame.height / 3.0
+
+                    if relativeY >= (thirdHeight * 2.0) {
+                        detectedZone = .topThird
+                    } else if relativeY >= thirdHeight {
+                        detectedZone = .middleThird
+                    } else {
+                        detectedZone = .bottomThird
+                    }
                 }
             }
         } else {

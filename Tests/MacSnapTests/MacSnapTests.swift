@@ -77,6 +77,39 @@ struct SnapGeometryTests {
         #expect(pair.ratio == 0.85) // Não deixa passar de 85%
     }
 
+    @Test func testVerticalPairedSplitWithMagneticSnapping() {
+        // Simula tela vertical 1080x1920
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1080, height: 1920)
+        let dummyTop = WindowElement(element: AXUIElementCreateSystemWide(), pid: 10)
+        let dummyBottom = WindowElement(element: AXUIElementCreateSystemWide(), pid: 11)
+
+        let verticalPair = PairedSplit(
+            firstWindow: dummyTop,
+            secondWindow: dummyBottom,
+            orientation: .vertical,
+            visibleFrame: visibleFrame,
+            ratio: 0.5
+        )
+
+        let (topRect, bottomRect) = verticalPair.calculateFrames()
+        #expect(topRect.height == 960)
+        #expect(bottomRect.height == 960)
+        #expect(bottomRect.origin.y == 0)
+        #expect(topRect.origin.y == 960)
+        #expect(verticalPair.dividerY == 960)
+
+        // Testa atração magnética em 50%
+        // Se o cursor estiver em Y = 980 (que seria ratio ~0.49), deve travar magneticamente em 0.50
+        verticalPair.updateRatioFromCursor(cursorCoordinate: 980, primaryScreenHeight: 1920)
+        #expect(verticalPair.ratio == 0.50)
+
+        // Testa atração magnética em 1/3 (quando ratio for ~0.333)
+        // cursorCoordinate correspondente a ~34% do topo
+        let cursorForOneThird = 1920.0 * (1.0 - 0.34)
+        verticalPair.updateRatioFromCursor(cursorCoordinate: cursorForOneThird, primaryScreenHeight: 1920)
+        #expect(abs(verticalPair.ratio - (1.0 / 3.0)) < 0.001)
+    }
+
     @Test func testVerticalMonitorThirdsCalculations() {
         // Simula um monitor vertical (1080 x 1920, visível 1080 x 1890)
         let visibleFrame = CGRect(x: 0, y: 0, width: 1080, height: 1890)
