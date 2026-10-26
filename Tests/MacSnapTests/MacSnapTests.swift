@@ -134,4 +134,41 @@ struct SnapGeometryTests {
         #expect(topTwoThirds.origin.y == 630)
         #expect(topTwoThirds.height == 1260)
     }
+
+    @Test func testHorizontalAsymmetricAndThreeColumnCalculations() {
+        // Simula monitor 16:9 padrão (1920x1080)
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+
+        // 3 Colunas iguais
+        let leftThird = SnapZone.leftThird.targetRect(for: visibleFrame)
+        #expect(leftThird.origin.x == 0)
+        #expect(leftThird.width == 640)
+        #expect(leftThird.height == 1080)
+
+        let centerThird = SnapZone.centerThird.targetRect(for: visibleFrame)
+        #expect(centerThird.origin.x == 640)
+        #expect(centerThird.width == 640)
+
+        let rightThird = SnapZone.rightThird.targetRect(for: visibleFrame)
+        #expect(rightThird.origin.x == 1280)
+        #expect(rightThird.width == 640)
+
+        // Assimétrico 2/3 + 1/3
+        let left23 = SnapZone.leftTwoThirds.targetRect(for: visibleFrame)
+        #expect(left23.origin.x == 0)
+        #expect(left23.width == 1280)
+
+        let right13 = SnapZone.rightOneThird.targetRect(for: visibleFrame)
+        #expect(right13.origin.x == 1280)
+        #expect(right13.width == 640)
+
+        // Assimétrico Invertido: 1/3 + 2/3
+        let left13 = SnapZone.leftOneThird.targetRect(for: visibleFrame)
+        #expect(left13.origin.x == 0)
+        #expect(left13.width == 640)
+
+        let right23 = SnapZone.rightTwoThirds.targetRect(for: visibleFrame)
+        #expect(right23.origin.x == 640)
+        #expect(right23.width == 1280)
+    }
 }

@@ -63,7 +63,35 @@ public final class MenuBarController {
         centerItem.target = self
         menu.addItem(centerItem)
 
-        // 3. Submenu de Layouts Verticais
+        // 3. Submenu de Colunas e Assimétricos Horizontais (16:9 / Ultrawide)
+        let horizontalMenu = NSMenu()
+        let leftThirdItem = NSMenuItem(title: "Coluna Esquerda (1/3)", action: #selector(snapLeftThird), keyEquivalent: "")
+        leftThirdItem.target = self
+        horizontalMenu.addItem(leftThirdItem)
+
+        let centerThirdItem = NSMenuItem(title: "Coluna Central (1/3)", action: #selector(snapCenter), keyEquivalent: "")
+        centerThirdItem.target = self
+        horizontalMenu.addItem(centerThirdItem)
+
+        let rightThirdItem = NSMenuItem(title: "Coluna Direita (1/3)", action: #selector(snapRightThird), keyEquivalent: "")
+        rightThirdItem.target = self
+        horizontalMenu.addItem(rightThirdItem)
+
+        horizontalMenu.addItem(NSMenuItem.separator())
+
+        let leftTwoThirdsItem = NSMenuItem(title: "Esquerda 2/3 + Direita 1/3", action: #selector(snapLeftTwoThirds), keyEquivalent: "")
+        leftTwoThirdsItem.target = self
+        horizontalMenu.addItem(leftTwoThirdsItem)
+
+        let leftOneThirdItem = NSMenuItem(title: "Esquerda 1/3 + Direita 2/3 (Inverso)", action: #selector(snapLeftOneThird), keyEquivalent: "")
+        leftOneThirdItem.target = self
+        horizontalMenu.addItem(leftOneThirdItem)
+
+        let horizontalParentItem = NSMenuItem(title: "Layouts Horizontais (16:9)", action: nil, keyEquivalent: "")
+        horizontalParentItem.submenu = horizontalMenu
+        menu.addItem(horizontalParentItem)
+
+        // 4. Submenu de Layouts Verticais
         let verticalMenu = NSMenu()
         let topHalfItem = NSMenuItem(title: "Metade Superior", action: #selector(snapTopHalf), keyEquivalent: "")
         topHalfItem.target = self
@@ -89,9 +117,13 @@ public final class MenuBarController {
 
         verticalMenu.addItem(NSMenuItem.separator())
 
-        let topTwoThirdsItem = NSMenuItem(title: "Dois Terços Superior (2/3)", action: #selector(snapTopTwoThirds), keyEquivalent: "")
+        let topTwoThirdsItem = NSMenuItem(title: "Topo 2/3 + Base 1/3", action: #selector(snapTopTwoThirds), keyEquivalent: "")
         topTwoThirdsItem.target = self
         verticalMenu.addItem(topTwoThirdsItem)
+
+        let bottomTwoThirdsItem = NSMenuItem(title: "Topo 1/3 + Base 2/3 (Inverso)", action: #selector(snapBottomTwoThirds), keyEquivalent: "")
+        bottomTwoThirdsItem.target = self
+        verticalMenu.addItem(bottomTwoThirdsItem)
 
         let verticalParentItem = NSMenuItem(title: "Layouts Verticais (Portrait)", action: nil, keyEquivalent: "")
         verticalParentItem.submenu = verticalMenu
@@ -158,6 +190,26 @@ public final class MenuBarController {
 
     @objc private func snapTopTwoThirds() {
         snapEngine.snapFocusedWindow(to: .topTwoThirds)
+    }
+
+    @objc private func snapBottomTwoThirds() {
+        snapEngine.snapFocusedWindow(to: .bottomTwoThirds)
+    }
+
+    @objc private func snapLeftThird() {
+        snapEngine.snapFocusedWindow(to: .leftThird)
+    }
+
+    @objc private func snapRightThird() {
+        snapEngine.snapFocusedWindow(to: .rightThird)
+    }
+
+    @objc private func snapLeftTwoThirds() {
+        snapEngine.snapFocusedWindow(to: .leftTwoThirds)
+    }
+
+    @objc private func snapLeftOneThird() {
+        snapEngine.snapFocusedWindow(to: .leftOneThird)
     }
 
     @objc private func clearPairing() {

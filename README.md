@@ -12,19 +12,27 @@ Gerenciador nativo de janelas para macOS construído em **Swift puro**, trazendo
    - Arrastar para os quatro cantos: divide a tela em quadrantes (25%).
 2. **Preview Overlay Translúcido**:
    - Sombra estilizada em efeito *frosted glass* (`NSVisualEffectView`) que mostra a área antes de você soltar a janela.
-3. **Suporte Inteligente a Monitores Verticais (Snap Bar Estilo Windows 11)**:
-   - Detecta automaticamente se o monitor está na vertical (`height > width`).
-   - Ao arrastar a janela para o topo de uma tela vertical, uma barra deslizante de layouts (**Snap Bar**) surge no topo com opções feitas para telas verticais:
+3. **Snap Bar Adaptativa no Topo (Windows 11 Style)**:
+   - Ao arrastar qualquer janela em direção ao topo da tela, uma barra deslizante em vidro fosco se abre oferecendo templates prontos:
+   - **Telas Horizontais (16:9 / Ultrawide):**
+     - **2 Colunas (50/50):** Esquerda e Direita.
+     - **3 Colunas (1/3 cada):** Esquerda, Centro e Direita.
+     - **Assimétrico (2/3 + 1/3):** Esquerda 2/3 e Direita 1/3.
+     - **Assimétrico Inverso (1/3 + 2/3):** Esquerda 1/3 e Direita 2/3.
+     - **4 Quadrantes (2x2):** Cantos da tela.
+     - **Maximizar:** Tela cheia.
+   - **Telas Verticais (Portrait):**
      - **Metades Verticais:** Topo (1/2) e Base (1/2).
      - **Terços Verticais:** Topo (1/3), Centro (1/3) e Base (1/3).
      - **Dois Terços:** Topo (2/3) e Base (1/3).
+     - **Dois Terços Inverso:** Topo (1/3) e Base (2/3).
      - **Maximizar:** Tela cheia vertical.
-   - Ao pairar o mouse em um dos cartões, a pré-visualização acende na tela e o snap é aplicado ao soltar.
-4. **Janelas Emparelhadas & Divisor Central (Windows Snap Assist)**:
-   - Quando duas janelas são posicionadas lado a lado, uma **barra divisória flutuante interativa** (`DividerHandleWindow`) surge na junção.
-   - Ao arrastar esse divisor central com o cursor `⬌`, **ambas as janelas são redimensionadas simultaneamente**, mantendo a tela preenchida de forma proporcional.
+4. **Janelas Emparelhadas & Divisor Interativo (Snap Assist)**:
+   - Quando duas janelas são posicionadas lado a lado ou topo/base, uma **barra divisória flutuante interativa** (`DividerHandleWindow`) surge na junção.
+   - Cursor adaptativo: `⬌` para horizontal e `⬍` para vertical.
+   - **Atração Magnética Suave:** Ao arrastar perto de 50/50, 33/67 ou 67/33, o divisor puxa suavemente para facilitar travar a proporção.
 5. **Ícone na Barra de Menus (`NSStatusItem`)**:
-   - Menu dedicado com ações para layouts horizontais e verticais, além de checagem de permissões.
+   - Menu dedicado com submenus para layouts horizontais (16:9) e verticais, além de checagem de permissões.
    - Roda como aplicativo de fundo (`LSUIElement` / `.accessory`), sem poluir o Dock.
 
 ---

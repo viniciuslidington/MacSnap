@@ -150,27 +150,45 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
                 }
             }
         } else {
-            // 2. MONITOR HORIZONTAL (Padrão)
-            snapLayoutBar.dismiss()
+            // 2. MONITOR HORIZONTAL (16:9 / Ultrawide)
+            let topZoneThreshold: CGFloat = 160.0
+            let isInsideBar = snapLayoutBar.frame.insetBy(dx: -20, dy: -20).contains(point)
+            let isApproachingTop = (point.y >= visibleFrame.maxY - topZoneThreshold) || isInsideBar
 
-            // Detecção de cantos (quadrantes)
-            if isLeft && isNearTop {
-                detectedZone = .topLeftQuarter
-            } else if isRight && isNearTop {
-                detectedZone = .topRightQuarter
-            } else if isLeft && isNearBottom {
-                detectedZone = .bottomLeftQuarter
-            } else if isRight && isNearBottom {
-                detectedZone = .bottomRightQuarter
-            // Metades e maximização
-            } else if isTop {
-                detectedZone = .maximize
-            } else if isLeft {
-                detectedZone = .leftHalf
-            } else if isRight {
-                detectedZone = .rightHalf
-            } else if isBottom {
-                detectedZone = .bottomHalf
+            if isApproachingTop {
+                // Abre a barra flutuante com layouts adaptados para telas horizontais (50/50, 3 colunas, 2/3, 1/3, quadrantes, maximizar)
+                snapLayoutBar.present(on: screen)
+
+                // Verifica se o usuário está pairando sobre um dos cards da barra
+                if let hoveredBarZone = snapLayoutBar.checkHover(at: point) {
+                    detectedZone = hoveredBarZone
+                } else if isTop {
+                    detectedZone = .maximize
+                }
+            } else {
+                snapLayoutBar.dismiss()
+            }
+
+            if detectedZone == nil {
+                // Detecção de cantos (quadrantes)
+                if isLeft && isNearTop {
+                    detectedZone = .topLeftQuarter
+                } else if isRight && isNearTop {
+                    detectedZone = .topRightQuarter
+                } else if isLeft && isNearBottom {
+                    detectedZone = .bottomLeftQuarter
+                } else if isRight && isNearBottom {
+                    detectedZone = .bottomRightQuarter
+                // Metades e maximização
+                } else if isTop {
+                    detectedZone = .maximize
+                } else if isLeft {
+                    detectedZone = .leftHalf
+                } else if isRight {
+                    detectedZone = .rightHalf
+                } else if isBottom {
+                    detectedZone = .bottomHalf
+                }
             }
         }
 

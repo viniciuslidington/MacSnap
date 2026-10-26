@@ -38,62 +38,70 @@ public final class PairedResizeManager {
         let visibleFrame = screen.visibleFrame
 
         switch zone {
-        // 1. Emparelhamento Horizontal (Lado a Lado)
+        // 1. Emparelhamento Horizontal Simétrico (50/50)
         case .leftHalf:
             recentLeftWindow = window
             if let right = recentRightWindow {
-                let pair = PairedSplit(
-                    firstWindow: window,
-                    secondWindow: right,
-                    orientation: .horizontal,
-                    visibleFrame: visibleFrame,
-                    ratio: activePair?.ratio ?? 0.5
-                )
-                self.activePair = pair
-                showDivider(for: pair)
+                createHorizontalPair(left: window, right: right, ratio: 0.5, visibleFrame: visibleFrame)
             }
 
         case .rightHalf:
             recentRightWindow = window
             if let left = recentLeftWindow {
-                let pair = PairedSplit(
-                    firstWindow: left,
-                    secondWindow: window,
-                    orientation: .horizontal,
-                    visibleFrame: visibleFrame,
-                    ratio: activePair?.ratio ?? 0.5
-                )
-                self.activePair = pair
-                showDivider(for: pair)
+                createHorizontalPair(left: left, right: window, ratio: 0.5, visibleFrame: visibleFrame)
             }
 
-        // 2. Emparelhamento Vertical (Topo e Base - Ideal para Monitor Vertical)
+        // 2. Emparelhamento Horizontal Assimétrico (2/3 e 1/3)
+        case .leftTwoThirds:
+            recentLeftWindow = window
+            if let right = recentRightWindow {
+                createHorizontalPair(left: window, right: right, ratio: 2.0 / 3.0, visibleFrame: visibleFrame)
+            }
+
+        case .rightOneThird:
+            recentRightWindow = window
+            if let left = recentLeftWindow {
+                createHorizontalPair(left: left, right: window, ratio: 2.0 / 3.0, visibleFrame: visibleFrame)
+            }
+
+        // 3. Emparelhamento Horizontal Assimétrico Invertido (1/3 e 2/3)
+        case .leftOneThird, .leftThird:
+            recentLeftWindow = window
+            if let right = recentRightWindow {
+                createHorizontalPair(left: window, right: right, ratio: 1.0 / 3.0, visibleFrame: visibleFrame)
+            }
+
+        case .rightTwoThirds:
+            recentRightWindow = window
+            if let left = recentLeftWindow {
+                createHorizontalPair(left: left, right: window, ratio: 1.0 / 3.0, visibleFrame: visibleFrame)
+            }
+
+        // 4. Emparelhamento Vertical Simétrico (Topo e Base 50/50)
         case .topHalf:
             recentTopWindow = window
             if let bottom = recentBottomWindow {
-                let pair = PairedSplit(
-                    firstWindow: window,
-                    secondWindow: bottom,
-                    orientation: .vertical,
-                    visibleFrame: visibleFrame,
-                    ratio: activePair?.ratio ?? 0.5
-                )
-                self.activePair = pair
-                showDivider(for: pair)
+                createVerticalPair(top: window, bottom: bottom, ratio: 0.5, visibleFrame: visibleFrame)
             }
 
         case .bottomHalf:
             recentBottomWindow = window
             if let top = recentTopWindow {
-                let pair = PairedSplit(
-                    firstWindow: top,
-                    secondWindow: window,
-                    orientation: .vertical,
-                    visibleFrame: visibleFrame,
-                    ratio: activePair?.ratio ?? 0.5
-                )
-                self.activePair = pair
-                showDivider(for: pair)
+                createVerticalPair(top: top, bottom: window, ratio: 0.5, visibleFrame: visibleFrame)
+            }
+
+        // 5. Emparelhamento Vertical Assimétrico (2/3 e 1/3)
+        case .topTwoThirds:
+            recentTopWindow = window
+            if let bottom = recentBottomWindow {
+                createVerticalPair(top: window, bottom: bottom, ratio: 2.0 / 3.0, visibleFrame: visibleFrame)
+            }
+
+        // 6. Emparelhamento Vertical Assimétrico Invertido (1/3 e 2/3)
+        case .bottomTwoThirds:
+            recentBottomWindow = window
+            if let top = recentTopWindow {
+                createVerticalPair(top: top, bottom: window, ratio: 1.0 / 3.0, visibleFrame: visibleFrame)
             }
 
         case .maximize:
@@ -106,6 +114,30 @@ public final class PairedResizeManager {
         default:
             clearPairing()
         }
+    }
+
+    private func createHorizontalPair(left: WindowElement, right: WindowElement, ratio: CGFloat, visibleFrame: CGRect) {
+        let pair = PairedSplit(
+            firstWindow: left,
+            secondWindow: right,
+            orientation: .horizontal,
+            visibleFrame: visibleFrame,
+            ratio: ratio
+        )
+        self.activePair = pair
+        showDivider(for: pair)
+    }
+
+    private func createVerticalPair(top: WindowElement, bottom: WindowElement, ratio: CGFloat, visibleFrame: CGRect) {
+        let pair = PairedSplit(
+            firstWindow: top,
+            secondWindow: bottom,
+            orientation: .vertical,
+            visibleFrame: visibleFrame,
+            ratio: ratio
+        )
+        self.activePair = pair
+        showDivider(for: pair)
     }
 
     /// Força o emparelhamento explícito de duas janelas conhecidas.
