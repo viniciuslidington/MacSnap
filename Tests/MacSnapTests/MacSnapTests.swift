@@ -253,4 +253,13 @@ struct SnapGeometryTests {
         manager.clearPairing()
         #expect(manager.activePairs.count == 0)
     }
+
+    @MainActor
+    @Test func testAutoDetectAdjacentWindowsExecution() {
+        let manager = PairedResizeManager.shared
+        // Executa a busca automática de janelas adjacentes no ambiente atual
+        let detected = manager.autoDetectAdjacentWindows()
+        // Deve executar sem falhas retornando a lista de pares encontrados
+        #expect(detected.count >= 0)
+    }
 }

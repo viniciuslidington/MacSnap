@@ -304,6 +304,166 @@ public final class PairedResizeManager {
         screenState.dividerWindow.update(for: pair)
     }
 
+    /// Escaneia automaticamente a tela especificada (ou todas as telas) procurando duas janelas abertas
+    /// que compartilham uma intercessão comum (lado a lado ou empilhadas) e conecta o divisor interativo entre elas.
+    @discardableResult
+    public func autoDetectAdjacentWindows(on targetScreen: NSScreen? = nil) -> [PairedSplit] {
+        let screensToScan = targetScreen != nil ? [targetScreen!] : screenService.screens
+        var detectedPairs: [PairedSplit] = []
+
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let windowInfoList = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return detectedPairs
+        }
+
+        let myPid = ProcessInfo.processInfo.processIdentifier
+        let primaryHeight = screenService.primaryScreenHeight
+
+        for screen in screensToScan {
+            let screenState = state(for: screen)
+            let cgScreenY = primaryHeight - (screen.frame.origin.y + screen.frame.height)
+            let cgScreenRect = CGRect(
+                x: screen.frame.origin.x,
+                y: cgScreenY,
+                width: screen.frame.width,
+                height: screen.frame.height
+            )
+
+            // Filtra as janelas da tela (Layer 0, visíveis, tamanho mínimo de 150x150, fora o MacSnap)
+            var candidates: [(pid: pid_t, name: String, frame: CGRect)] = []
+            for info in windowInfoList {
+                let layer = info[kCGWindowLayer as String] as? Int ?? -1
+                guard layer == 0 else { continue }
+
+                let pid = info[kCGWindowOwnerPID as String] as? pid_t ?? 0
+                guard pid != myPid && pid != 0 else { continue }
+
+                let name = info[kCGWindowOwnerName as String] as? String ?? ""
+
+                if let boundsDict = info[kCGWindowBounds as String] as? [String: Any],
+                   let x = boundsDict["X"] as? Double,
+                   let y = boundsDict["Y"] as? Double,
+                   let w = boundsDict["Width"] as? Double,
+                   let h = boundsDict["Height"] as? Double {
+                    let frame = CGRect(x: x, y: y, width: w, height: h)
+                    let center = CGPoint(x: frame.midX, y: frame.midY)
+
+                    if cgScreenRect.contains(center) && w >= 150 && h >= 150 {
+                        candidates.append((pid: pid, name: name, frame: frame))
+                    }
+                }
+            }
+
+            guard candidates.count >= 2 else { continue }
+
+            // Procura o par com maior área ou adjacência evidente
+            var foundPair: (first: WindowElement, second: WindowElement, orientation: SplitOrientation, ratio: CGFloat)?
+
+            for i in 0..<candidates.count {
+                if foundPair != nil { break }
+                for j in (i + 1)..<candidates.count {
+                    let c1 = candidates[i]
+                    let c2 = candidates[j]
+                    guard c1.pid != c2.pid else { continue }
+
+                    // 1. Verificação de adjacência vertical (Empilhadas: Topo e Base)
+                    let overlapX = max(0, min(c1.frame.maxX, c2.frame.maxX) - max(c1.frame.minX, c2.frame.minX))
+                    let minW = min(c1.frame.width, c2.frame.width)
+
+                    if overlapX / minW >= 0.65 {
+                        let gap1 = abs(c1.frame.maxY - c2.frame.minY)
+                        let gap2 = abs(c2.frame.maxY - c1.frame.minY)
+
+                        if gap1 <= 32 {
+                            // c1 está no topo, c2 está na base
+                            if let topElem = windowElement(for: c1.pid, cgFrame: c1.frame),
+                               let bottomElem = windowElement(for: c2.pid, cgFrame: c2.frame) {
+                                let ratio = c1.frame.height / screen.visibleFrame.height
+                                foundPair = (topElem, bottomElem, .vertical, ratio)
+                                break
+                            }
+                        } else if gap2 <= 32 {
+                            // c2 está no topo, c1 está na base
+                            if let topElem = windowElement(for: c2.pid, cgFrame: c2.frame),
+                               let bottomElem = windowElement(for: c1.pid, cgFrame: c1.frame) {
+                                let ratio = c2.frame.height / screen.visibleFrame.height
+                                foundPair = (topElem, bottomElem, .vertical, ratio)
+                                break
+                            }
+                        }
+                    }
+
+                    // 2. Verificação de adjacência horizontal (Lado a Lado: Esquerda e Direita)
+                    let overlapY = max(0, min(c1.frame.maxY, c2.frame.maxY) - max(c1.frame.minY, c2.frame.minY))
+                    let minH = min(c1.frame.height, c2.frame.height)
+
+                    if overlapY / minH >= 0.65 {
+                        let gap1 = abs(c1.frame.maxX - c2.frame.minX)
+                        let gap2 = abs(c2.frame.maxX - c1.frame.minX)
+
+                        if gap1 <= 32 {
+                            // c1 está na esquerda, c2 está na direita
+                            if let leftElem = windowElement(for: c1.pid, cgFrame: c1.frame),
+                               let rightElem = windowElement(for: c2.pid, cgFrame: c2.frame) {
+                                let ratio = c1.frame.width / screen.visibleFrame.width
+                                foundPair = (leftElem, rightElem, .horizontal, ratio)
+                                break
+                            }
+                        } else if gap2 <= 32 {
+                            // c2 está na esquerda, c1 está na direita
+                            if let leftElem = windowElement(for: c2.pid, cgFrame: c2.frame),
+                               let rightElem = windowElement(for: c1.pid, cgFrame: c1.frame) {
+                                let ratio = c2.frame.width / screen.visibleFrame.width
+                                foundPair = (leftElem, rightElem, .horizontal, ratio)
+                                break
+                            }
+                        }
+                    }
+                }
+            }
+
+            if let found = foundPair {
+                let clampedRatio = min(max(found.ratio, 0.15), 0.85)
+                let pair = PairedSplit(
+                    firstWindow: found.first,
+                    secondWindow: found.second,
+                    orientation: found.orientation,
+                    visibleFrame: screen.visibleFrame,
+                    ratio: clampedRatio
+                )
+                screenState.pair = pair
+                screenState.dividerWindow.update(for: pair)
+                detectedPairs.append(pair)
+            }
+        }
+
+        return detectedPairs
+    }
+
+    /// Localiza o objeto WindowElement correspondente ao PID e frame da janela.
+    private func windowElement(for pid: pid_t, cgFrame: CGRect) -> WindowElement? {
+        let appElement = AXUIElementCreateApplication(pid)
+        var windowsValue: CFTypeRef?
+
+        if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsValue) == .success,
+           let winArray = windowsValue as? [AXUIElement] {
+            for win in winArray {
+                let elem = WindowElement(element: win, pid: pid)
+                if let axFrame = elem.axFrame {
+                    if abs(axFrame.origin.x - cgFrame.origin.x) < 40 &&
+                       abs(axFrame.origin.y - cgFrame.origin.y) < 40 {
+                        return elem
+                    }
+                }
+            }
+            if let first = winArray.first {
+                return WindowElement(element: first, pid: pid)
+            }
+        }
+
+        return nil
+    }
+
     /// Remove a barra divisória e desfaz o vínculo de emparelhamento ativo (de uma tela específica ou de todas).
     public func clearPairing(for screen: NSScreen? = nil) {
         if let screen = screen {

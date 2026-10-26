@@ -21,6 +21,20 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // Ativa o monitoramento global de arraste de janelas e bordas
         eventMonitor.startMonitoring()
 
+        // Auto-reconhecimento inicial de janelas adjacentes abertas em qualquer monitor
+        PairedResizeManager.shared.autoDetectAdjacentWindows()
+
+        // Observa ativação e alternância de janelas para auto-conectar janelas adjacentes
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task { @MainActor in
+                PairedResizeManager.shared.autoDetectAdjacentWindows()
+            }
+        }
+
         print("[MacSnap] Pronto para gerenciar janelas.")
     }
 

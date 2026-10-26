@@ -168,6 +168,10 @@ public final class MenuBarController {
 
         menu.addItem(NSMenuItem.separator())
 
+        let detectItem = NSMenuItem(title: "Reconectar Janelas Adjacentes", action: #selector(autoDetectWindows), keyEquivalent: "d")
+        detectItem.target = self
+        menu.addItem(detectItem)
+
         let clearPairItem = NSMenuItem(title: "Desfazer Divisor Emparelhado", action: #selector(clearPairing), keyEquivalent: "")
         clearPairItem.target = self
         menu.addItem(clearPairItem)
@@ -247,6 +251,10 @@ public final class MenuBarController {
 
     @objc private func snapLeftOneThird() {
         snapEngine.snapFocusedWindow(to: .leftOneThird)
+    }
+
+    @objc private func autoDetectWindows() {
+        pairingManager.autoDetectAdjacentWindows()
     }
 
     @objc private func clearPairing() {
