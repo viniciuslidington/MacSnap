@@ -6,6 +6,7 @@ public final class ScreenPairState {
     public let screenID: CGDirectDisplayID
     public var pair: PairedSplit?
     public let dividerWindow: DividerHandleWindow
+    public let resizeOverlay: PairedResizeOverlayWindow
 
     public weak var recentLeftWindow: WindowElement?
     public weak var recentRightWindow: WindowElement?
@@ -15,11 +16,13 @@ public final class ScreenPairState {
     public init(screenID: CGDirectDisplayID) {
         self.screenID = screenID
         self.dividerWindow = DividerHandleWindow()
+        self.resizeOverlay = PairedResizeOverlayWindow()
     }
 
     public func clear() {
         pair = nil
         dividerWindow.orderOut(nil)
+        resizeOverlay.dismiss(animated: false)
         recentLeftWindow = nil
         recentRightWindow = nil
         recentTopWindow = nil
@@ -59,6 +62,14 @@ public final class PairedResizeManager {
     }
 
     private func setupDividerCallbacks(for state: ScreenPairState) {
+        state.dividerWindow.onDividerDragStarted = { [weak self, weak state] in
+            guard let self = self, let state = state, let pair = state.pair else { return }
+            guard pair.isValid else { return }
+            guard let screen = self.screenService.screens.first(where: { $0.displayID == state.screenID }) else { return }
+            let (firstRect, secondRect) = pair.calculateFrames()
+            state.resizeOverlay.present(on: screen, firstRect: firstRect, secondRect: secondRect, animated: true)
+        }
+
         state.dividerWindow.onDividerDragged = { [weak self, weak state] cursorCoordinate in
             guard let self = self, let state = state, let pair = state.pair else { return }
             guard pair.isValid else {
@@ -68,10 +79,16 @@ public final class PairedResizeManager {
             let primaryHeight = self.screenService.primaryScreenHeight
             pair.updateRatioFromCursor(cursorCoordinate: cursorCoordinate, primaryScreenHeight: primaryHeight)
             state.dividerWindow.update(for: pair)
+
+            let (firstRect, secondRect) = pair.calculateFrames()
+            state.resizeOverlay.update(firstRect: firstRect, secondRect: secondRect)
         }
 
-        state.dividerWindow.onDividerReleased = {
-            // Drag finished; ratio saved in pair
+        state.dividerWindow.onDividerReleased = { [weak self, weak state] in
+            guard let self = self, let state = state, let pair = state.pair else { return }
+            let primaryHeight = self.screenService.primaryScreenHeight
+            state.resizeOverlay.dismiss(animated: true)
+            pair.applyCurrentSplit(primaryScreenHeight: primaryHeight)
         }
     }
 

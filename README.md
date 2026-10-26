@@ -64,6 +64,7 @@ To completely uninstall MacSnap and remove Launch at Login at any time:
 - Optimal layer ordering: the layout menu always stays in front of the preview overlay, providing continuous visual orientation.
 
 ### 4. 🔗 Paired Windows & Interactive Multi-Monitor Split (Snap Assist)
+- **Real-Time Dual-Window Frosted Blur**: While dragging the central resize divider, both windows are wrapped in an elegant *Apple Glass* frosted blur overlay that resizes smoothly at 120Hz, masking any third-party app repaint stutter. Upon release, the blur fades out cleanly.
 - **Auto-Detection of Existing Windows**: Automatically identifies open windows placed side-by-side or stacked on the same display, attaching an interactive resize divider at their junction.
 - **On-Demand Hover-Only Visibility**: The divider handle remains 100% invisible during normal work, fading in smoothly (*Apple Glass*) only when the cursor hovers near the split seam.
 - **Persistent Multi-Monitor Support**: Each connected screen maintains its paired window state independently. Adjusting a split on a landscape monitor does not disturb pairing on a vertical monitor.
@@ -109,10 +110,11 @@ Sources/MacSnap/
     ├── Pairing/
     │   └── PairedResizeManager.swift    # Multi-monitor paired window and divider manager
     └── UI/
-        ├── SnapLayoutBarWindow.swift    # Apple Glass floating layout bar (Pill and Expanded)
-        ├── PreviewOverlayWindow.swift   # Translucent snap preview overlay window
-        ├── DividerHandleWindow.swift    # Interactive split divider bar
-        └── MenuBarController.swift      # Menu bar status item and context menu controller
+        ├── SnapLayoutBarWindow.swift        # Apple Glass floating layout bar (Pill and Expanded)
+        ├── PreviewOverlayWindow.swift       # Translucent snap preview overlay window
+        ├── PairedResizeOverlayWindow.swift  # Dual-window frosted blur overlay during paired resize
+        ├── DividerHandleWindow.swift        # Interactive split divider bar
+        └── MenuBarController.swift          # Menu bar status item and context menu controller
 ```
 
 ---

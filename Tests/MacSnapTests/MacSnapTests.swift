@@ -362,4 +362,67 @@ struct SnapGeometryTests {
         // Must execute without errors, returning list of detected pairs
         #expect(detected.count >= 0)
     }
+
+    @MainActor
+    @Test func testPairedResizeOverlayWindowPresentationAndUpdates() {
+        let overlay = PairedResizeOverlayWindow()
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
+        // 1. Initial state
+        #expect(!overlay.isPresenting)
+        #expect(overlay.currentScreen == nil)
+
+        // 2. Present overlay with two window frames
+        let rect1 = CGRect(x: screen.frame.origin.x, y: screen.frame.origin.y, width: 800, height: 1000)
+        let rect2 = CGRect(x: screen.frame.origin.x + 800, y: screen.frame.origin.y, width: 1120, height: 1000)
+
+        overlay.present(on: screen, firstRect: rect1, secondRect: rect2, animated: false)
+        #expect(overlay.isPresenting)
+        #expect(overlay.currentScreen == screen)
+
+        // Verify panels are inset by 4pt margin
+        let panel1 = overlay.firstPanelFrame
+        let panel2 = overlay.secondPanelFrame
+        #expect(panel1.width == 792) // 800 - 8
+        #expect(panel2.width == 1112) // 1120 - 8
+
+        // 3. Update during drag
+        let updatedRect1 = CGRect(x: screen.frame.origin.x, y: screen.frame.origin.y, width: 960, height: 1000)
+        let updatedRect2 = CGRect(x: screen.frame.origin.x + 960, y: screen.frame.origin.y, width: 960, height: 1000)
+        overlay.update(firstRect: updatedRect1, secondRect: updatedRect2)
+
+        #expect(overlay.firstPanelFrame.width == 952) // 960 - 8
+        #expect(overlay.secondPanelFrame.width == 952)
+
+        // 4. Dismiss
+        overlay.dismiss(animated: false)
+        #expect(!overlay.isPresenting)
+    }
+
+    @MainActor
+    @Test func testDividerDragCallbackLifecycle() {
+        let divider = DividerHandleWindow()
+        var dragStartedCalled = false
+        var draggedCoordinate: CGFloat?
+        var dragReleasedCalled = false
+
+        divider.onDividerDragStarted = {
+            dragStartedCalled = true
+        }
+        divider.onDividerDragged = { coord in
+            draggedCoordinate = coord
+        }
+        divider.onDividerReleased = {
+            dragReleasedCalled = true
+        }
+
+        divider.onDividerDragStarted?()
+        #expect(dragStartedCalled)
+
+        divider.onDividerDragged?(750.0)
+        #expect(draggedCoordinate == 750.0)
+
+        divider.onDividerReleased?()
+        #expect(dragReleasedCalled)
+    }
 }

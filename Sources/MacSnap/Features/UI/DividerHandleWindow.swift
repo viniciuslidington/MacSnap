@@ -4,6 +4,7 @@ import Cocoa
 /// Supports vertical orientation (⬌) for side-by-side windows and horizontal (⬍) for stacked windows on portrait displays.
 @MainActor
 public final class DividerHandleWindow: NSPanel {
+    public var onDividerDragStarted: (() -> Void)?
     public var onDividerDragged: ((CGFloat) -> Void)?
     public var onDividerReleased: (() -> Void)?
 
@@ -131,6 +132,7 @@ final class DividerCustomView: NSView {
         isDragging = true
         self.alphaValue = 1.0
         needsDisplay = true
+        dividerWindow?.onDividerDragStarted?()
     }
 
     override func mouseDragged(with event: NSEvent) {
