@@ -12,11 +12,19 @@ Gerenciador nativo de janelas para macOS construído em **Swift puro**, trazendo
    - Arrastar para os quatro cantos: divide a tela em quadrantes (25%).
 2. **Preview Overlay Translúcido**:
    - Sombra estilizada em efeito *frosted glass* (`NSVisualEffectView`) que mostra a área antes de você soltar a janela.
-3. **Janelas Emparelhadas & Divisor Central (Windows Snap Assist)**:
+3. **Suporte Inteligente a Monitores Verticais (Snap Bar Estilo Windows 11)**:
+   - Detecta automaticamente se o monitor está na vertical (`height > width`).
+   - Ao arrastar a janela para o topo de uma tela vertical, uma barra deslizante de layouts (**Snap Bar**) surge no topo com opções feitas para telas verticais:
+     - **Metades Verticais:** Topo (1/2) e Base (1/2).
+     - **Terços Verticais:** Topo (1/3), Centro (1/3) e Base (1/3).
+     - **Dois Terços:** Topo (2/3) e Base (1/3).
+     - **Maximizar:** Tela cheia vertical.
+   - Ao pairar o mouse em um dos cartões, a pré-visualização acende na tela e o snap é aplicado ao soltar.
+4. **Janelas Emparelhadas & Divisor Central (Windows Snap Assist)**:
    - Quando duas janelas são posicionadas lado a lado, uma **barra divisória flutuante interativa** (`DividerHandleWindow`) surge na junção.
    - Ao arrastar esse divisor central com o cursor `⬌`, **ambas as janelas são redimensionadas simultaneamente**, mantendo a tela preenchida de forma proporcional.
-4. **Ícone na Barra de Menus (`NSStatusItem`)**:
-   - Permite verificar permissões de acessibilidade em tempo real e acionar snaps manuais.
+5. **Ícone na Barra de Menus (`NSStatusItem`)**:
+   - Menu dedicado com ações para layouts horizontais e verticais, além de checagem de permissões.
    - Roda como aplicativo de fundo (`LSUIElement` / `.accessory`), sem poluir o Dock.
 
 ---
