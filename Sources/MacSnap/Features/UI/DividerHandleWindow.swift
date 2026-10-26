@@ -69,11 +69,15 @@ final class DividerCustomView: NSView {
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        wantsLayer = true
+        alphaValue = 0.0 // Oculto por padrão para não poluir a tela
         setupTrackingArea()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
+        wantsLayer = true
+        alphaValue = 0.0
         setupTrackingArea()
     }
 
@@ -103,17 +107,30 @@ final class DividerCustomView: NSView {
 
     override func mouseEntered(with event: NSEvent) {
         isHovered = true
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.15
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            self.animator().alphaValue = 1.0
+        }
         needsDisplay = true
     }
 
     override func mouseExited(with event: NSEvent) {
         isHovered = false
+        if !isDragging {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.20
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                self.animator().alphaValue = 0.0
+            }
+        }
         needsDisplay = true
     }
 
     // CRUCIAL: Inicia o rastreamento de arraste do mouse
     override func mouseDown(with event: NSEvent) {
         isDragging = true
+        self.alphaValue = 1.0
         needsDisplay = true
     }
 
@@ -125,6 +142,21 @@ final class DividerCustomView: NSView {
 
     override func mouseUp(with event: NSEvent) {
         isDragging = false
+        let mouseLocation = NSEvent.mouseLocation
+        let windowLoc = window?.convertPoint(fromScreen: mouseLocation) ?? .zero
+        let localLoc = convert(windowLoc, from: nil)
+
+        if bounds.contains(localLoc) {
+            isHovered = true
+            self.alphaValue = 1.0
+        } else {
+            isHovered = false
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.20
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                self.animator().alphaValue = 0.0
+            }
+        }
         needsDisplay = true
         dividerWindow?.onDividerReleased?()
     }
@@ -133,39 +165,38 @@ final class DividerCustomView: NSView {
         super.draw(dirtyRect)
 
         let isActive = isHovered || isDragging
+        guard isActive || alphaValue > 0.01 else { return }
+
         let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
 
-        // 1. Linha divisória de vidro translúcido ao longo de toda a extensão
+        // 1. Linha divisória de vidro translúcido ao longo da intercessão
         let activeLineColor = isDark
             ? NSColor(white: 1.0, alpha: 0.75)
             : NSColor(white: 0.25, alpha: 0.65)
-        let baseLineColor = isDark
-            ? NSColor(white: 1.0, alpha: 0.20)
-            : NSColor(white: 0.0, alpha: 0.15)
 
         if orientation == .horizontal {
             let lineX = bounds.midX
             let linePath = NSBezierPath()
             linePath.move(to: CGPoint(x: lineX, y: 0))
             linePath.line(to: CGPoint(x: lineX, y: bounds.height))
-            linePath.lineWidth = isActive ? 2.0 : 1.0
-            (isActive ? activeLineColor : baseLineColor).setStroke()
+            linePath.lineWidth = 1.5
+            activeLineColor.setStroke()
             linePath.stroke()
         } else {
             let lineY = bounds.midY
             let linePath = NSBezierPath()
             linePath.move(to: CGPoint(x: 0, y: lineY))
             linePath.line(to: CGPoint(x: bounds.width, y: lineY))
-            linePath.lineWidth = isActive ? 2.0 : 1.0
-            (isActive ? activeLineColor : baseLineColor).setStroke()
+            linePath.lineWidth = 1.5
+            activeLineColor.setStroke()
             linePath.stroke()
         }
 
-        // 2. Pílula central de vidro translúcido (Glass Handle)
+        // 2. Pílula central de vidro translúcido (Apple Glass Handle)
         let pillRect: NSRect
         if orientation == .horizontal {
-            let pillWidth: CGFloat = isActive ? 6.0 : 4.0
-            let pillHeight: CGFloat = isActive ? 56.0 : 44.0
+            let pillWidth: CGFloat = 6.0
+            let pillHeight: CGFloat = 56.0
             pillRect = NSRect(
                 x: (bounds.width - pillWidth) / 2.0,
                 y: (bounds.height - pillHeight) / 2.0,
@@ -173,8 +204,8 @@ final class DividerCustomView: NSView {
                 height: pillHeight
             )
         } else {
-            let pillWidth: CGFloat = isActive ? 56.0 : 44.0
-            let pillHeight: CGFloat = isActive ? 6.0 : 4.0
+            let pillWidth: CGFloat = 56.0
+            let pillHeight: CGFloat = 6.0
             pillRect = NSRect(
                 x: (bounds.width - pillWidth) / 2.0,
                 y: (bounds.height - pillHeight) / 2.0,
@@ -187,10 +218,8 @@ final class DividerCustomView: NSView {
         let pillFillColor: NSColor
         if isDragging {
             pillFillColor = isDark ? NSColor(white: 1.0, alpha: 0.95) : NSColor(white: 0.15, alpha: 0.95)
-        } else if isHovered {
-            pillFillColor = isDark ? NSColor(white: 1.0, alpha: 0.80) : NSColor(white: 0.25, alpha: 0.80)
         } else {
-            pillFillColor = isDark ? NSColor(white: 1.0, alpha: 0.45) : NSColor(white: 0.40, alpha: 0.45)
+            pillFillColor = isDark ? NSColor(white: 1.0, alpha: 0.85) : NSColor(white: 0.25, alpha: 0.85)
         }
         pillFillColor.setFill()
         path.fill()

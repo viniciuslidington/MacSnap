@@ -48,4 +48,13 @@ extension NSScreen {
     public var isPortrait: Bool {
         return frame.height > frame.width
     }
+
+    /// Identificador numérico único do display no macOS (CGDirectDisplayID).
+    public var displayID: CGDirectDisplayID {
+        let key = NSDeviceDescriptionKey("NSScreenNumber")
+        if let id = deviceDescription[key] as? NSNumber {
+            return CGDirectDisplayID(id.uint32Value)
+        }
+        return CGDirectDisplayID(abs(frame.origin.x.hashValue ^ frame.origin.y.hashValue))
+    }
 }

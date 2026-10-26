@@ -108,9 +108,14 @@ public final class PairedSplit: @unchecked Sendable {
     public var dividerX: CGFloat { dividerPosition }
     public var dividerY: CGFloat { dividerPosition }
 
+    /// Verifica se ambas as janelas do par continuam abertas e acessíveis no sistema.
+    public var isValid: Bool {
+        return firstWindow.axFrame != nil && secondWindow.axFrame != nil
+    }
+
     /// Retângulo do divisor para posicionar a janela de manuseio.
     public var dividerFrame: CGRect {
-        let handleBreadth: CGFloat = 20.0
+        let handleBreadth: CGFloat = 24.0
         switch orientation {
         case .horizontal:
             return CGRect(

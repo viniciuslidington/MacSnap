@@ -27,8 +27,9 @@ Gerenciador nativo de janelas para macOS construído em **Swift puro**, trazendo
      - **Dois Terços:** Topo (2/3) e Base (1/3).
      - **Dois Terços Inverso:** Topo (1/3) e Base (2/3).
      - **Maximizar:** Tela cheia vertical.
-4. **Janelas Emparelhadas & Divisor Interativo (Snap Assist)**:
-   - Quando duas janelas são posicionadas lado a lado ou topo/base, uma **barra divisória flutuante interativa** (`DividerHandleWindow`) surge na junção.
+4. **Janelas Emparelhadas & Divisor Interativo Multi-Monitor (Snap Assist)**:
+   - **Exibição Inteligente sob Demanda (*Hover-Only*)**: O divisor e o botão de ajuste permanecem 100% invisíveis durante o uso normal para não poluir a tela, surgindo com fade-in suave de vidro (*Apple Glass*) somente quando o cursor se aproxima da junção entre as janelas.
+   - **Suporte Multi-Monitor Persistente**: Cada tela conectada mantém seu par ativo de forma completamente independente. Ajustar janelas em um monitor horizontal não cancela nem "esquece" as janelas emparelhadas no monitor vertical.
    - Cursor adaptativo: `⬌` para horizontal e `⬍` para vertical.
    - **Atração Magnética Suave:** Ao arrastar perto de 50/50, 33/67 ou 67/33, o divisor puxa suavemente para facilitar travar a proporção.
 5. **Ícone Vetorizado na Barra de Menus (`NSStatusItem`)**:

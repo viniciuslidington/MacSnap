@@ -1,21 +1,42 @@
 import Cocoa
 
+/// Estado isolado de emparelhamento por monitor, mantendo histórico e divisor independente.
+@MainActor
+public final class ScreenPairState {
+    public let screenID: CGDirectDisplayID
+    public var pair: PairedSplit?
+    public let dividerWindow: DividerHandleWindow
+
+    public weak var recentLeftWindow: WindowElement?
+    public weak var recentRightWindow: WindowElement?
+    public weak var recentTopWindow: WindowElement?
+    public weak var recentBottomWindow: WindowElement?
+
+    public init(screenID: CGDirectDisplayID) {
+        self.screenID = screenID
+        self.dividerWindow = DividerHandleWindow()
+    }
+
+    public func clear() {
+        pair = nil
+        dividerWindow.orderOut(nil)
+        recentLeftWindow = nil
+        recentRightWindow = nil
+        recentTopWindow = nil
+        recentBottomWindow = nil
+    }
+}
+
 /// Gerencia janelas emparelhadas lado a lado (horizontal) ou empilhadas (vertical) e o divisor interativo central.
-/// Possui auto-descoberta dinâmica de janelas vizinhas na intercessão da tela e cálculo de encaixe sem sobreposição.
+/// Suporta múltiplos monitores simultâneos mantendo os pares ativos em cada tela de forma independente.
 @MainActor
 public final class PairedResizeManager {
     public static let shared = PairedResizeManager()
 
-    private var activePair: PairedSplit?
-    private let dividerWindow = DividerHandleWindow()
+    /// Estados de emparelhamento indexados pelo ID numérico de cada monitor (displayID)
+    private var statesByScreen: [CGDirectDisplayID: ScreenPairState] = [:]
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
-
-    // Histórico recente para permitir emparelhamento dinâmico
-    private weak var recentLeftWindow: WindowElement?
-    private weak var recentRightWindow: WindowElement?
-    private weak var recentTopWindow: WindowElement?
-    private weak var recentBottomWindow: WindowElement?
 
     public init(
         screenService: ScreenServiceProtocol = ScreenService.shared,
@@ -23,20 +44,48 @@ public final class PairedResizeManager {
     ) {
         self.screenService = screenService
         self.accessibilityService = accessibilityService
-        setupDividerCallbacks()
     }
 
-    private func setupDividerCallbacks() {
-        dividerWindow.onDividerDragged = { [weak self] cursorCoordinate in
-            guard let self = self, let pair = self.activePair else { return }
+    /// Retorna ou inicializa o estado de emparelhamento dedicado para a tela especificada.
+    public func state(for screen: NSScreen) -> ScreenPairState {
+        let id = screen.displayID
+        if let existing = statesByScreen[id] {
+            return existing
+        }
+        let newState = ScreenPairState(screenID: id)
+        setupDividerCallbacks(for: newState)
+        statesByScreen[id] = newState
+        return newState
+    }
+
+    private func setupDividerCallbacks(for state: ScreenPairState) {
+        state.dividerWindow.onDividerDragged = { [weak self, weak state] cursorCoordinate in
+            guard let self = self, let state = state, let pair = state.pair else { return }
+            guard pair.isValid else {
+                state.clear()
+                return
+            }
             let primaryHeight = self.screenService.primaryScreenHeight
             pair.updateRatioFromCursor(cursorCoordinate: cursorCoordinate, primaryScreenHeight: primaryHeight)
-            self.dividerWindow.update(for: pair)
+            state.dividerWindow.update(for: pair)
         }
 
-        dividerWindow.onDividerReleased = {
-            // Arraste finalizado; proporção salva
+        state.dividerWindow.onDividerReleased = {
+            // Arraste finalizado; proporção salva no pair
         }
+    }
+
+    /// Retorna o par ativo no monitor sob o cursor (ou o primeiro disponível para compatibilidade).
+    public var activePair: PairedSplit? {
+        if let currentScreen = screenService.screenContaining(point: NSEvent.mouseLocation) {
+            return statesByScreen[currentScreen.displayID]?.pair
+        }
+        return statesByScreen.values.compactMap { $0.pair }.first
+    }
+
+    /// Retorna todos os pares ativos mantidos através de todos os monitores conectados.
+    public var activePairs: [PairedSplit] {
+        return statesByScreen.values.compactMap { $0.pair }
     }
 
     /// Busca ativamente se já existe uma janela aberta no lado oposto para conectar o par imediatamente.
@@ -73,7 +122,6 @@ public final class PairedResizeManager {
             let samplePoint = CGPoint(x: x + (w * 0.5), y: y + (h * 0.75))
             if let topPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
                let topFrame = topPartner.cocoaFrame(primaryScreenHeight: primaryHeight) {
-                // topFrame.minY é a borda inferior real da janela superior
                 let availableHeight = topFrame.minY - y
                 if availableHeight >= 80 {
                     let flushRect = CGRect(x: x, y: y, width: w, height: availableHeight)
@@ -131,75 +179,78 @@ public final class PairedResizeManager {
         return nil
     }
 
-    /// Registra uma nova janela que sofreu snap e ativa o divisor caso haja uma parceira oposta.
+    /// Registra uma nova janela que sofreu snap e ativa o divisor caso haja uma parceira oposta no monitor específico.
     public func registerSnap(window: WindowElement, zone: SnapZone, screen: NSScreen) {
         let visibleFrame = screen.visibleFrame
+        let screenState = state(for: screen)
 
-        // 1. Tenta emparelhar dinamicamente usando a parceira detectada na intercessão
+        // 1. Tenta emparelhar dinamicamente usando a parceira detectada na intercessão desta tela
         if let flush = calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: window) {
             if flush.orientation == .vertical {
                 if zone == .topHalf || zone == .topThird || zone == .topTwoThirds {
-                    recentTopWindow = window
-                    recentBottomWindow = flush.partner
-                    createVerticalPair(top: window, bottom: flush.partner, ratio: flush.ratio, visibleFrame: visibleFrame)
+                    screenState.recentTopWindow = window
+                    screenState.recentBottomWindow = flush.partner
+                    createVerticalPair(top: window, bottom: flush.partner, ratio: flush.ratio, visibleFrame: visibleFrame, in: screenState)
                 } else {
-                    recentTopWindow = flush.partner
-                    recentBottomWindow = window
-                    createVerticalPair(top: flush.partner, bottom: window, ratio: flush.ratio, visibleFrame: visibleFrame)
+                    screenState.recentTopWindow = flush.partner
+                    screenState.recentBottomWindow = window
+                    createVerticalPair(top: flush.partner, bottom: window, ratio: flush.ratio, visibleFrame: visibleFrame, in: screenState)
                 }
             } else {
                 if zone == .leftHalf || zone == .leftOneThird || zone == .leftThird || zone == .leftTwoThirds {
-                    recentLeftWindow = window
-                    recentRightWindow = flush.partner
-                    createHorizontalPair(left: window, right: flush.partner, ratio: flush.ratio, visibleFrame: visibleFrame)
+                    screenState.recentLeftWindow = window
+                    screenState.recentRightWindow = flush.partner
+                    createHorizontalPair(left: window, right: flush.partner, ratio: flush.ratio, visibleFrame: visibleFrame, in: screenState)
                 } else {
-                    recentLeftWindow = flush.partner
-                    recentRightWindow = window
-                    createHorizontalPair(left: flush.partner, right: window, ratio: flush.ratio, visibleFrame: visibleFrame)
+                    screenState.recentLeftWindow = flush.partner
+                    screenState.recentRightWindow = window
+                    createHorizontalPair(left: flush.partner, right: window, ratio: flush.ratio, visibleFrame: visibleFrame, in: screenState)
                 }
             }
             return
         }
 
-        // 2. Fallback de histórico recente caso não tenha detectado na tela
+        // 2. Fallback de histórico recente isolado para esta tela
         switch zone {
         case .leftHalf, .leftOneThird, .leftThird, .leftTwoThirds:
-            recentLeftWindow = window
-            if let right = recentRightWindow {
-                createHorizontalPair(left: window, right: right, ratio: 0.5, visibleFrame: visibleFrame)
+            screenState.recentLeftWindow = window
+            if let right = screenState.recentRightWindow {
+                createHorizontalPair(left: window, right: right, ratio: 0.5, visibleFrame: visibleFrame, in: screenState)
             }
 
         case .rightHalf, .rightOneThird, .rightTwoThirds:
-            recentRightWindow = window
-            if let left = recentLeftWindow {
-                createHorizontalPair(left: left, right: window, ratio: 0.5, visibleFrame: visibleFrame)
+            screenState.recentRightWindow = window
+            if let left = screenState.recentLeftWindow {
+                createHorizontalPair(left: left, right: window, ratio: 0.5, visibleFrame: visibleFrame, in: screenState)
             }
 
         case .topHalf, .topThird, .topTwoThirds:
-            recentTopWindow = window
-            if let bottom = recentBottomWindow {
-                createVerticalPair(top: window, bottom: bottom, ratio: 0.5, visibleFrame: visibleFrame)
+            screenState.recentTopWindow = window
+            if let bottom = screenState.recentBottomWindow {
+                createVerticalPair(top: window, bottom: bottom, ratio: 0.5, visibleFrame: visibleFrame, in: screenState)
             }
 
         case .bottomHalf, .bottomThird, .bottomTwoThirds:
-            recentBottomWindow = window
-            if let top = recentTopWindow {
-                createVerticalPair(top: top, bottom: window, ratio: 0.5, visibleFrame: visibleFrame)
+            screenState.recentBottomWindow = window
+            if let top = screenState.recentTopWindow {
+                createVerticalPair(top: top, bottom: window, ratio: 0.5, visibleFrame: visibleFrame, in: screenState)
             }
 
         case .maximize:
-            clearPairing()
-            recentLeftWindow = nil
-            recentRightWindow = nil
-            recentTopWindow = nil
-            recentBottomWindow = nil
+            screenState.clear()
 
         default:
-            clearPairing()
+            screenState.clear()
         }
     }
 
-    private func createHorizontalPair(left: WindowElement, right: WindowElement, ratio: CGFloat, visibleFrame: CGRect) {
+    private func createHorizontalPair(
+        left: WindowElement,
+        right: WindowElement,
+        ratio: CGFloat,
+        visibleFrame: CGRect,
+        in screenState: ScreenPairState
+    ) {
         guard left.rawElement != right.rawElement else { return }
         let pair = PairedSplit(
             firstWindow: left,
@@ -208,11 +259,17 @@ public final class PairedResizeManager {
             visibleFrame: visibleFrame,
             ratio: ratio
         )
-        self.activePair = pair
-        showDivider(for: pair)
+        screenState.pair = pair
+        screenState.dividerWindow.update(for: pair)
     }
 
-    private func createVerticalPair(top: WindowElement, bottom: WindowElement, ratio: CGFloat, visibleFrame: CGRect) {
+    private func createVerticalPair(
+        top: WindowElement,
+        bottom: WindowElement,
+        ratio: CGFloat,
+        visibleFrame: CGRect,
+        in screenState: ScreenPairState
+    ) {
         guard top.rawElement != bottom.rawElement else { return }
         let pair = PairedSplit(
             firstWindow: top,
@@ -221,11 +278,11 @@ public final class PairedResizeManager {
             visibleFrame: visibleFrame,
             ratio: ratio
         )
-        self.activePair = pair
-        showDivider(for: pair)
+        screenState.pair = pair
+        screenState.dividerWindow.update(for: pair)
     }
 
-    /// Força o emparelhamento explícito de duas janelas conhecidas.
+    /// Força o emparelhamento explícito de duas janelas conhecidas na tela especificada.
     public func pair(
         first: WindowElement,
         second: WindowElement,
@@ -233,6 +290,7 @@ public final class PairedResizeManager {
         on screen: NSScreen,
         ratio: CGFloat = 0.5
     ) {
+        let screenState = state(for: screen)
         let pair = PairedSplit(
             firstWindow: first,
             secondWindow: second,
@@ -240,19 +298,22 @@ public final class PairedResizeManager {
             visibleFrame: screen.visibleFrame,
             ratio: ratio
         )
-        self.activePair = pair
+        screenState.pair = pair
         let primaryHeight = screenService.primaryScreenHeight
         pair.applyCurrentSplit(primaryScreenHeight: primaryHeight)
-        showDivider(for: pair)
+        screenState.dividerWindow.update(for: pair)
     }
 
-    private func showDivider(for pair: PairedSplit) {
-        dividerWindow.update(for: pair)
-    }
-
-    /// Remove a barra divisória e desfaz o vínculo de emparelhamento ativo.
-    public func clearPairing() {
-        activePair = nil
-        dividerWindow.orderOut(nil)
+    /// Remove a barra divisória e desfaz o vínculo de emparelhamento ativo (de uma tela específica ou de todas).
+    public func clearPairing(for screen: NSScreen? = nil) {
+        if let screen = screen {
+            statesByScreen[screen.displayID]?.clear()
+            statesByScreen.removeValue(forKey: screen.displayID)
+        } else {
+            for (_, state) in statesByScreen {
+                state.clear()
+            }
+            statesByScreen.removeAll()
+        }
     }
 }

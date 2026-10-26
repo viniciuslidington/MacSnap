@@ -191,4 +191,66 @@ struct SnapGeometryTests {
         #expect(previewView?.subviews.first is NSVisualEffectView)
         #expect(previewView?.subviews.last is PreviewOverlayCanvasView)
     }
+
+    @MainActor
+    @Test func testDividerHoverOnlyVisibility() {
+        let divider = DividerHandleWindow()
+        let view = divider.contentView
+        #expect(view != nil)
+        // O divisor deve iniciar 100% invisível por padrão (alpha 0.0) para não poluir a tela
+        #expect(view?.alphaValue == 0.0)
+
+        // Simula a passagem do cursor (mouseEntered)
+        let dummyEvent = NSEvent.mouseEvent(
+            with: .mouseMoved,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 0,
+            pressure: 0
+        )!
+        view?.mouseEntered(with: dummyEvent)
+        #expect(view?.alphaValue == 1.0)
+
+        // Simula o cursor saindo da área da costura (mouseExited)
+        view?.mouseExited(with: dummyEvent)
+        #expect(view?.alphaValue == 0.0)
+    }
+
+    @MainActor
+    @Test func testMultiMonitorPairingPersistence() {
+        let manager = PairedResizeManager.shared
+        manager.clearPairing()
+
+        let screens = NSScreen.screens
+        guard screens.count >= 2 else { return }
+
+        let screen1 = screens[0]
+        let screen2 = screens[1]
+
+        let dummy1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 101)
+        let dummy2 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 102)
+        let dummy3 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 201)
+        let dummy4 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 202)
+
+        // Emparelha no Monitor 1
+        manager.pair(first: dummy1, second: dummy2, orientation: .vertical, on: screen1, ratio: 0.5)
+        #expect(manager.state(for: screen1).pair != nil)
+        #expect(manager.activePairs.count == 1)
+
+        // Emparelha no Monitor 2
+        manager.pair(first: dummy3, second: dummy4, orientation: .horizontal, on: screen2, ratio: 0.5)
+
+        // Verifica que o Monitor 1 NÃO foi esquecido! Ambos continuam emparelhados simultaneamente.
+        #expect(manager.state(for: screen1).pair != nil)
+        #expect(manager.state(for: screen2).pair != nil)
+        #expect(manager.activePairs.count == 2)
+
+        // Limpa
+        manager.clearPairing()
+        #expect(manager.activePairs.count == 0)
+    }
 }
