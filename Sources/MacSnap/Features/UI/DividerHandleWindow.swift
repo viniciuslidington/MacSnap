@@ -7,6 +7,8 @@ public final class DividerHandleWindow: NSPanel {
     public var onDividerDragStarted: (() -> Void)?
     public var onDividerDragged: ((CGFloat) -> Void)?
     public var onDividerReleased: (() -> Void)?
+    public var validatePair: (() -> Bool)?
+    public var onInvalidPairDetected: (() -> Void)?
 
     private let customView: DividerCustomView
 
@@ -23,6 +25,7 @@ public final class DividerHandleWindow: NSPanel {
         self.backgroundColor = .clear
         self.level = .screenSaver
         self.hasShadow = false
+        self.acceptsMouseMovedEvents = true
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
         customView.dividerWindow = self
@@ -32,6 +35,12 @@ public final class DividerHandleWindow: NSPanel {
     /// Indicates whether the user is actively dragging this divider.
     public var isDragging: Bool {
         customView.isDragging
+    }
+
+    public override func orderOut(_ sender: Any?) {
+        customView.alphaValue = 0.0
+        customView.isDragging = false
+        super.orderOut(sender)
     }
 
     /// Updates the divider based on a `PairedSplit` instance.
@@ -46,7 +55,7 @@ public final class DividerHandleWindow: NSPanel {
 
     /// Legacy method for horizontal compatibility.
     public func updatePosition(dividerX: CGFloat, visibleFrame: CGRect) {
-        let handleWidth: CGFloat = 20.0
+        let handleWidth: CGFloat = 24.0
         let frame = CGRect(
             x: dividerX - (handleWidth / 2.0),
             y: visibleFrame.origin.y,
@@ -113,6 +122,14 @@ final class DividerCustomView: NSView {
     }
 
     override func mouseEntered(with event: NSEvent) {
+        if let validator = dividerWindow?.validatePair {
+            guard validator() else {
+                dividerWindow?.orderOut(nil)
+                dividerWindow?.onInvalidPairDetected?()
+                return
+            }
+        }
+
         isHovered = true
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15

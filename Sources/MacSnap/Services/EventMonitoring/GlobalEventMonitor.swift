@@ -16,6 +16,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private var dragStartPoint: CGPoint?
     private var isHoldingWindowOrTab: Bool = false
     private var isDragGestureIgnored: Bool = false
+    private var isZoneFromLayoutBar: Bool = false
 
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
@@ -77,6 +78,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         self.snapLayoutBar.dismiss(animated: false)
         self.activeZone = nil
         self.activeScreen = nil
+        self.isZoneFromLayoutBar = false
         self.currentDraggedWindow = nil
         self.dragStartPoint = nil
         self.isHoldingWindowOrTab = false
@@ -191,6 +193,9 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         let dragThreshold: CGFloat = 14.0
         if !isHoldingWindowOrTab && dragDist >= dragThreshold && currentDraggedWindow != nil {
             isHoldingWindowOrTab = true
+            if let window = currentDraggedWindow {
+                PairedResizeManager.shared.unpairWindow(window)
+            }
         }
 
         // When dragging a window, immediately present the collapsed Apple Glass pill
@@ -222,6 +227,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         let isNearBottom = point.y <= visibleFrame.minY + cornerThreshold
 
         var detectedZone: SnapZone?
+        var isFromLayoutBar = false
 
         // 1. Interaction with SnapLayoutBar (Pill or Expanded)
         if snapLayoutBar.presentationState == .pill {
@@ -232,6 +238,9 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             if flyoutHitArea.contains(point) {
                 // Cursor hovering over layout cards: select matching slot
                 detectedZone = snapLayoutBar.checkHover(at: point)
+                if detectedZone != nil {
+                    isFromLayoutBar = true
+                }
             } else {
                 // Cursor moved away from expanded flyout: collapse smoothly back to pill
                 snapLayoutBar.collapseToPill()
@@ -285,11 +294,13 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         if let zone = detectedZone {
             self.activeZone = zone
             self.activeScreen = screen
+            self.isZoneFromLayoutBar = isFromLayoutBar
 
-            // Intelligent dynamic preview: if an adjacent paired window exists,
-            // flush preview boundary against it to avoid ugly screen overlap
+            // Intelligent dynamic preview:
+            // When choosing from the layout bar modal, strictly display the exact card slot geometry ("tamanho certo").
+            // For edge snapping, calculate flush boundary if a genuine partner exists.
             let targetRect: CGRect
-            if let flush = PairedResizeManager.shared.calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: currentDraggedWindow) {
+            if !isFromLayoutBar, let flush = PairedResizeManager.shared.calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: currentDraggedWindow) {
                 targetRect = flush.targetRect
             } else {
                 targetRect = zone.targetRect(for: visibleFrame)
@@ -300,6 +311,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             if self.activeZone != nil {
                 self.activeZone = nil
                 self.activeScreen = nil
+                self.isZoneFromLayoutBar = false
                 self.previewOverlay.dismiss()
             }
         }
@@ -313,14 +325,16 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             let targetScreen = self.activeScreen ?? self.screenService.screenContaining(point: NSEvent.mouseLocation)
 
             if let screen = targetScreen {
+                let fromModal = self.isZoneFromLayoutBar
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
-                    self?.snapEngine.snapWindow(window, to: zone, on: screen)
+                    self?.snapEngine.snapWindow(window, to: zone, on: screen, forceExactSize: fromModal)
                 }
             }
         }
 
         self.activeZone = nil
         self.activeScreen = nil
+        self.isZoneFromLayoutBar = false
         self.currentDraggedWindow = nil
         self.dragStartPoint = nil
         self.isHoldingWindowOrTab = false

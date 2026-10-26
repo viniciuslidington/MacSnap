@@ -543,4 +543,122 @@ struct SnapGeometryTests {
         // System wide element has no desktop subrole
         #expect(!dummy.isDesktopWindow)
     }
+
+    @MainActor
+    @Test func testDividerValidationOnHoverBlocksGhostLine() {
+        let divider = DividerHandleWindow()
+        var invalidCallbackCalled = false
+        divider.validatePair = {
+            return false // Simulates stale or non-adjacent pair
+        }
+        divider.onInvalidPairDetected = {
+            invalidCallbackCalled = true
+        }
+
+        let view = divider.contentView as? DividerCustomView
+        #expect(view != nil)
+
+        // Simulate hover
+        let dummyEvent = NSEvent.mouseEvent(
+            with: .mouseMoved,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: 0,
+            windowNumber: 0,
+            context: nil,
+            eventNumber: 0,
+            clickCount: 0,
+            pressure: 0
+        )!
+        view?.mouseEntered(with: dummyEvent)
+
+        // When validatePair returns false, divider MUST NOT illuminate (alpha remains 0.0)
+        // and onInvalidPairDetected must be triggered immediately
+        #expect(view?.alphaValue == 0.0)
+        #expect(invalidCallbackCalled)
+    }
+
+    @MainActor
+    @Test func testUnpairWindowDisbandsActivePair() {
+        let manager = PairedResizeManager.shared
+        manager.clearPairing()
+
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let dummy1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 888)
+        let dummy2 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 999)
+
+        manager.pair(first: dummy1, second: dummy2, orientation: .horizontal, on: screen, ratio: 0.5)
+        #expect(manager.state(for: screen).pair != nil)
+
+        // When dummy1 starts being dragged away, unpairWindow must disband the pair
+        manager.unpairWindow(dummy1)
+        #expect(manager.state(for: screen).pair == nil)
+    }
+
+    @Test func testThreeColumnSnapCalculationsWithoutOverlap() {
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1920, height: 1080)
+        let leftRect = SnapZone.leftThird.targetRect(for: visibleFrame)
+        let centerRect = SnapZone.centerThird.targetRect(for: visibleFrame)
+        let rightRect = SnapZone.rightThird.targetRect(for: visibleFrame)
+
+        #expect(leftRect.origin.x == 0)
+        #expect(leftRect.width == 640)
+
+        #expect(centerRect.origin.x == 640)
+        #expect(centerRect.width == 640)
+
+        #expect(rightRect.origin.x == 1280)
+        #expect(rightRect.width == 640)
+
+        // Verify zero overlap between all three columns
+        #expect(leftRect.maxX == centerRect.minX)
+        #expect(centerRect.maxX == rightRect.minX)
+        #expect(rightRect.maxX == 1920)
+    }
+
+    @Test func testPairedSplitCalculateFramesExpansionAndShrinking() {
+        let visibleFrame = CGRect(x: 0, y: 50, width: 1800, height: 1000)
+        let dummy1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 111)
+        let dummy2 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 222)
+
+        let pair = PairedSplit(
+            firstWindow: dummy1,
+            secondWindow: dummy2,
+            orientation: .horizontal,
+            visibleFrame: visibleFrame,
+            ratio: 0.5
+        )
+
+        let (left1, right1) = pair.calculateFrames()
+        #expect(left1.width == 900)
+        #expect(right1.width == 900)
+        #expect(left1.origin.x == 0)
+        #expect(right1.origin.x == 900)
+        #expect(left1.maxX == right1.minX)
+
+        // Drag divider to 2/3
+        pair.ratio = 2.0 / 3.0
+        let (left2, right2) = pair.calculateFrames()
+        #expect(left2.width == 1200)
+        #expect(right2.width == 600)
+        #expect(left2.origin.x == 0)
+        #expect(right2.origin.x == 1200)
+        #expect(left2.maxX == right2.minX)
+        #expect(left2.width + right2.width == visibleFrame.width)
+    }
+
+    @MainActor
+    @Test func testThreeColumnSetupDoesNotDistortHalfSnaps() {
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+        let visibleFrame = screen.visibleFrame
+
+        // When snapping to leftHalf or rightHalf, default targets must strictly be 50%
+        let leftTarget = SnapZone.leftHalf.targetRect(for: visibleFrame)
+        let rightTarget = SnapZone.rightHalf.targetRect(for: visibleFrame)
+
+        #expect(leftTarget.width == (visibleFrame.width / 2.0))
+        #expect(rightTarget.width == (visibleFrame.width / 2.0))
+        #expect(leftTarget.origin.x == visibleFrame.origin.x)
+        #expect(rightTarget.origin.x == visibleFrame.origin.x + (visibleFrame.width / 2.0))
+    }
 }

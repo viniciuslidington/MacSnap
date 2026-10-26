@@ -39,14 +39,21 @@ public final class SnapEngine: WindowSnappingProtocol {
         snapWindow(window, to: zone, on: screen)
     }
 
-    public func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen) {
+    public func snapWindow(
+        _ window: WindowElement,
+        to zone: SnapZone,
+        on screen: NSScreen,
+        forceExactSize: Bool = false
+    ) {
         let visibleFrame = screen.visibleFrame
         let primaryHeight = screenService.primaryScreenHeight
 
         // Smart flush snapping without overlap: if a paired window already exists (e.g. Xcode at top),
-        // calculate the exact remaining space to dock flush like a puzzle piece
+        // calculate the exact remaining space to dock flush like a puzzle piece.
+        // When forceExactSize is true (e.g. user selected an explicit slot in the layout bar modal),
+        // use the exact target rectangle of the slot without alteration.
         let targetRect: CGRect
-        if let flush = pairingManager.calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: window) {
+        if !forceExactSize, let flush = pairingManager.calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: window) {
             targetRect = flush.targetRect
         } else {
             targetRect = zone.targetRect(for: visibleFrame)

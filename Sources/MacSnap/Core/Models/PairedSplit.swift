@@ -128,40 +128,33 @@ public final class PairedSplit: @unchecked Sendable {
         }
     }
 
-    /// Applies current split ratios to both windows ensuring NO overlap,
-    /// even when an app (such as Xcode) enforces minimum height constraints.
+    /// Applies current split ratios to both windows using directional anti-collision ordering,
+    /// ensuring shrinking windows release screen space before expanding windows resize.
     public func applyCurrentSplit(primaryScreenHeight: CGFloat) {
         let (firstRect, secondRect) = calculateFrames()
+
         switch orientation {
         case .horizontal:
-            firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
-            if let actualFirst = firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight) {
-                let actualLeftW = actualFirst.width
-                let remainingW = max(visibleFrame.width - actualLeftW, 100)
-                let adjustedSecond = CGRect(
-                    x: visibleFrame.origin.x + actualLeftW,
-                    y: visibleFrame.origin.y,
-                    width: remainingW,
-                    height: visibleFrame.height
-                )
-                secondWindow.setCocoaFrame(adjustedSecond, primaryScreenHeight: primaryScreenHeight)
+            let currentFirstW = firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight)?.width ?? firstRect.width
+            if firstRect.width > currentFirstW {
+                // First is expanding, second is shrinking: move second first to clear space
+                secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
+                firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
             } else {
+                // First is shrinking, second is expanding: shrink first first
+                firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
                 secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
             }
 
         case .vertical:
-            firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
-            if let actualTop = firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight) {
-                // actualTop.minY is the real bottom edge of the top window
-                let actualBottomHeight = max(actualTop.minY - visibleFrame.origin.y, 100)
-                let adjustedBottom = CGRect(
-                    x: visibleFrame.origin.x,
-                    y: visibleFrame.origin.y,
-                    width: visibleFrame.width,
-                    height: actualBottomHeight
-                )
-                secondWindow.setCocoaFrame(adjustedBottom, primaryScreenHeight: primaryScreenHeight)
+            let currentFirstH = firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight)?.height ?? firstRect.height
+            if firstRect.height > currentFirstH {
+                // Top is expanding, bottom is shrinking: move bottom first to clear space
+                secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
+                firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
             } else {
+                // Top is shrinking, bottom is expanding: shrink top first
+                firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
                 secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
             }
         }

@@ -40,7 +40,13 @@ public protocol WindowSnappingProtocol: AnyObject {
     func snapFocusedWindow(to zone: SnapZone)
 
     /// Applies a snap target zone to a specific window on a target display.
-    func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen)
+    func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool)
+}
+
+extension WindowSnappingProtocol {
+    public func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen) {
+        snapWindow(window, to: zone, on: screen, forceExactSize: false)
+    }
 }
 
 /// Contract for mouse and keyboard event monitoring.
