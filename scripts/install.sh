@@ -17,10 +17,10 @@ echo "=========================================================="
 echo "🚀 Instalando o MacSnap no macOS"
 echo "=========================================================="
 
-# 1. Compila a versão Release otimizada
+# 1. Compila a versão Release otimizada (Universal arm64 + x86_64 quando suportado)
 echo "📦 Compilando binário de produção (Release)..."
 cd "$PROJECT_DIR"
-swift build -c release
+swift build -c release --arch arm64 --arch x86_64 2>/dev/null || swift build -c release
 
 RELEASE_BIN="$PROJECT_DIR/.build/out/Products/Release/MacSnap"
 if [ ! -f "$RELEASE_BIN" ]; then

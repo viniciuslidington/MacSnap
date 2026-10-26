@@ -1,0 +1,47 @@
+name: Release MacSnap
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Universal App and Release
+    runs-on: macos-14
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Tests
+        run: swift test
+
+      - name: Build Universal Release Binary
+        run: swift build -c release --arch arm64 --arch x86_64
+
+      - name: Assemble MacSnap.app Bundle
+        run: |
+          mkdir -p MacSnap.app/Contents/MacOS
+          mkdir -p MacSnap.app/Contents/Resources
+          # Procura o binário gerado universal
+          RELEASE_BIN=$(find .build -name "MacSnap" -type f -perm +111 | grep -i "release" | head -n 1)
+          cp "$RELEASE_BIN" MacSnap.app/Contents/MacOS/MacSnap
+          chmod +x MacSnap.app/Contents/MacOS/MacSnap
+          cp Resources/Info.plist MacSnap.app/Contents/Info.plist
+          if [ -f "Resources/AppIcon.icns" ]; then
+            cp Resources/AppIcon.icns MacSnap.app/Contents/Resources/AppIcon.icns
+          fi
+          codesign --force --deep --sign - MacSnap.app
+          zip -r -y MacSnap.app.zip MacSnap.app
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MacSnap.app.zip
+          name: MacSnap ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
