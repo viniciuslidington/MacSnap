@@ -19,7 +19,7 @@ public final class SnapLayoutBarWindow: NSPanel {
 
         self.isOpaque = false
         self.backgroundColor = .clear
-        self.level = .floating
+        self.level = .screenSaver
         self.hasShadow = true
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
@@ -41,7 +41,7 @@ public final class SnapLayoutBarWindow: NSPanel {
 
         self.setFrame(CGRect(x: x, y: startY, width: barWidth, height: barHeight), display: true)
         self.alphaValue = 0.0
-        self.orderFront(nil)
+        self.orderFrontRegardless()
 
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2

@@ -20,7 +20,7 @@ public final class DividerHandleWindow: NSPanel {
 
         self.isOpaque = false
         self.backgroundColor = .clear
-        self.level = .floating
+        self.level = .screenSaver
         self.hasShadow = false
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
@@ -39,7 +39,7 @@ public final class DividerHandleWindow: NSPanel {
         )
         self.setFrame(frame, display: true)
         if !self.isVisible {
-            self.orderFront(nil)
+            self.orderFrontRegardless()
         }
     }
 }
