@@ -39,7 +39,7 @@ public final class DividerHandleWindow: NSPanel {
 
     /// Método legado para compatibilidade horizontal.
     public func updatePosition(dividerX: CGFloat, visibleFrame: CGRect) {
-        let handleWidth: CGFloat = 16.0
+        let handleWidth: CGFloat = 20.0
         let frame = CGRect(
             x: dividerX - (handleWidth / 2.0),
             y: visibleFrame.origin.y,
@@ -65,6 +65,7 @@ final class DividerCustomView: NSView {
     }
 
     private var isHovered = false
+    private var isDragging = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -86,10 +87,16 @@ final class DividerCustomView: NSView {
         self.addTrackingArea(trackingArea)
     }
 
+    // CRUCIAL: Permite que o primeiro clique seja imediatamente capturado mesmo com outros apps em foco
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        return true
+    }
+
+    override var acceptsFirstResponder: Bool {
+        return true
+    }
+
     override func resetCursorRects() {
-        // Cursor de acordo com a direção do divisor:
-        // Horizontal (janelas lado a lado) -> ⬌ (resizeLeftRight)
-        // Vertical (janelas empilhadas no monitor vertical) -> ⬍ (resizeUpDown)
         let cursor: NSCursor = (orientation == .horizontal) ? .resizeLeftRight : .resizeUpDown
         self.addCursorRect(bounds, cursor: cursor)
     }
@@ -104,6 +111,12 @@ final class DividerCustomView: NSView {
         needsDisplay = true
     }
 
+    // CRUCIAL: Inicia o rastreamento de arraste do mouse
+    override func mouseDown(with event: NSEvent) {
+        isDragging = true
+        needsDisplay = true
+    }
+
     override func mouseDragged(with event: NSEvent) {
         let mouseLoc = NSEvent.mouseLocation
         let coordinate: CGFloat = (orientation == .horizontal) ? mouseLoc.x : mouseLoc.y
@@ -111,17 +124,42 @@ final class DividerCustomView: NSView {
     }
 
     override func mouseUp(with event: NSEvent) {
+        isDragging = false
+        needsDisplay = true
         dividerWindow?.onDividerReleased?()
     }
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
+        let isActive = isHovered || isDragging
+        let accentColor = NSColor.controlAccentColor
+        let baseLineColor = NSColor.separatorColor.withAlphaComponent(0.4)
+
+        // 1. Linha divisória fina sutil ao longo de toda a extensão da intercessão
+        if orientation == .horizontal {
+            let lineX = bounds.midX
+            let linePath = NSBezierPath()
+            linePath.move(to: CGPoint(x: lineX, y: 0))
+            linePath.line(to: CGPoint(x: lineX, y: bounds.height))
+            linePath.lineWidth = isActive ? 2.0 : 1.0
+            (isActive ? accentColor.withAlphaComponent(0.85) : baseLineColor).setStroke()
+            linePath.stroke()
+        } else {
+            let lineY = bounds.midY
+            let linePath = NSBezierPath()
+            linePath.move(to: CGPoint(x: 0, y: lineY))
+            linePath.line(to: CGPoint(x: bounds.width, y: lineY))
+            linePath.lineWidth = isActive ? 2.0 : 1.0
+            (isActive ? accentColor.withAlphaComponent(0.85) : baseLineColor).setStroke()
+            linePath.stroke()
+        }
+
+        // 2. Pílula central em destaque para indicar o ponto de pega
         let pillRect: NSRect
         if orientation == .horizontal {
-            // Pílula vertical estreita
-            let pillWidth: CGFloat = 4.0
-            let pillHeight: CGFloat = 48.0
+            let pillWidth: CGFloat = isActive ? 6.0 : 4.0
+            let pillHeight: CGFloat = isActive ? 56.0 : 44.0
             pillRect = NSRect(
                 x: (bounds.width - pillWidth) / 2.0,
                 y: (bounds.height - pillHeight) / 2.0,
@@ -129,9 +167,8 @@ final class DividerCustomView: NSView {
                 height: pillHeight
             )
         } else {
-            // Pílula horizontal larga
-            let pillWidth: CGFloat = 48.0
-            let pillHeight: CGFloat = 4.0
+            let pillWidth: CGFloat = isActive ? 56.0 : 44.0
+            let pillHeight: CGFloat = isActive ? 6.0 : 4.0
             pillRect = NSRect(
                 x: (bounds.width - pillWidth) / 2.0,
                 y: (bounds.height - pillHeight) / 2.0,
@@ -140,9 +177,9 @@ final class DividerCustomView: NSView {
             )
         }
 
-        let path = NSBezierPath(roundedRect: pillRect, xRadius: 2.0, yRadius: 2.0)
-        let color = isHovered ? NSColor.controlAccentColor : NSColor.secondaryLabelColor.withAlphaComponent(0.65)
-        color.setFill()
+        let path = NSBezierPath(roundedRect: pillRect, xRadius: 3.0, yRadius: 3.0)
+        let pillColor = isDragging ? accentColor : (isHovered ? accentColor.withAlphaComponent(0.9) : NSColor.secondaryLabelColor.withAlphaComponent(0.7))
+        pillColor.setFill()
         path.fill()
     }
 }

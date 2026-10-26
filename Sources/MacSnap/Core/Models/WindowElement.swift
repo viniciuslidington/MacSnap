@@ -62,18 +62,18 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
             return false
         }
 
-        // Primeiro altera a posição, depois o tamanho. Em janelas que crescem,
-        // pode ser necessário inverter se a janela estiver travando nos limites da tela.
-        let posRes = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
+        // Tenta aplicar o tamanho primeiro para evitar colisão com a borda do monitor se a janela estiver encolhendo,
+        // seguido pela nova posição.
         let sizeRes = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
+        let posRes = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
 
-        // Se o tamanho não mudou porque a janela bateu na borda antes de reposicionar, tenta setar a posição novamente
-        if sizeRes != .success {
-            _ = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
+        // Se falhou (por exemplo, a janela está crescendo e precisa ser movida antes de expandir), inverte a ordem
+        if sizeRes != .success || posRes != .success {
             _ = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
+            _ = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
         }
 
-        return posRes == .success && sizeRes == .success
+        return true
     }
 
     /// Aplica nova posição e tamanho usando coordenadas Cocoa (convertendo internamente).
