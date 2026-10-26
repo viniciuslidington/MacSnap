@@ -1,4 +1,5 @@
 import Cocoa
+import ServiceManagement
 
 /// Controla o ícone e menu do MacSnap na barra de menus superior do macOS (NSStatusItem).
 @MainActor
@@ -178,6 +179,18 @@ public final class MenuBarController {
 
         menu.addItem(NSMenuItem.separator())
 
+        // Iniciar com o Mac (Launch at Login via SMAppService)
+        let isLaunchAtLogin = isLoginItemEnabled()
+        let launchItem = NSMenuItem(
+            title: isLaunchAtLogin ? "✓ Iniciar com o Mac" : "Iniciar com o Mac",
+            action: #selector(toggleLaunchAtLogin),
+            keyEquivalent: ""
+        )
+        launchItem.target = self
+        menu.addItem(launchItem)
+
+        menu.addItem(NSMenuItem.separator())
+
         // 3. Sair
         let quitItem = NSMenuItem(title: "Encerrar MacSnap", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
@@ -259,6 +272,25 @@ public final class MenuBarController {
 
     @objc private func clearPairing() {
         pairingManager.clearPairing()
+    }
+
+    private func isLoginItemEnabled() -> Bool {
+        return SMAppService.mainApp.status == .enabled
+    }
+
+    @objc private func toggleLaunchAtLogin() {
+        do {
+            if SMAppService.mainApp.status == .enabled {
+                try SMAppService.mainApp.unregister()
+                print("[MacSnap] Desregistrado de itens de início.")
+            } else {
+                try SMAppService.mainApp.register()
+                print("[MacSnap] Registrado para iniciar com o Mac com sucesso.")
+            }
+        } catch {
+            print("[MacSnap] Erro ao alterar inicialização no login via SMAppService: \(error)")
+        }
+        rebuildMenu()
     }
 
     @objc private func quitApp() {

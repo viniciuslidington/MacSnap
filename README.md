@@ -95,21 +95,31 @@ Testa:
 
 ---
 
-## 🚀 Como Executar
+## 🚀 Como Executar e Instalar
 
-### 1. Compilação via Linha de Comando
+### 1. Instalação e Inicialização Automática (Recomendado)
 
-```bash
-swift build
-```
-
-Para executar o binário diretamente:
+Disponibilizamos um script que compila a versão otimizada de produção, monta o pacote nativo `MacSnap.app` em `/Applications` e configura a inicialização automática com o macOS:
 
 ```bash
-.build/debug/MacSnap
+./scripts/install.sh
 ```
 
-### 2. Abrir no Xcode
+Depois de instalado:
+- O **MacSnap** iniciará automaticamente todas as vezes que você ligar ou fizer login no Mac.
+- Você também pode ativar/desativar a inicialização a qualquer momento clicando no ícone do MacSnap na barra de menus e selecionando **"✓ Iniciar com o Mac"**.
+- Para desinstalar e remover do início automático, execute:
+  ```bash
+  ./scripts/uninstall.sh
+  ```
+
+### 2. Compilação Manual via Linha de Comando
+
+```bash
+swift build -c release
+```
+
+### 3. Abrir no Xcode
 
 Basta abrir o diretório no Xcode:
 
@@ -117,10 +127,10 @@ Basta abrir o diretório no Xcode:
 open Package.swift
 ```
 
-### 3. Permissão de Acessibilidade
+### 4. Permissão de Acessibilidade
 
 Para que o macOS permita ao MacSnap redimensionar janelas de outros apps:
-1. Ao iniciar, o sistema exibirá uma solicitação de permissão.
+1. Ao iniciar pela primeira vez, o sistema exibirá uma solicitação de permissão.
 2. Caso não abra automaticamente, vá em:
    **Ajustes do Sistema > Privacidade e Segurança > Acessibilidade**
-3. Habilite o terminal ou o aplicativo `MacSnap`.
+3. Habilite o aplicativo `MacSnap` (localizado em `/Applications/MacSnap.app`).
