@@ -12,6 +12,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private var runLoopSource: CFRunLoopSource?
     private var activeZone: SnapZone?
     private var activeScreen: NSScreen?
+    private var currentDraggedWindow: WindowElement?
 
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
@@ -94,6 +95,12 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
     private func handleDrag(at point: CGPoint) {
         guard let screen = screenService.screenContaining(point: point) else { return }
+
+        // Captura a janela que está sendo arrastada no início do movimento antes que o foco mude
+        if currentDraggedWindow == nil {
+            currentDraggedWindow = accessibilityService.getFocusedWindow()
+        }
+
         let visibleFrame = screen.visibleFrame
         let edgeThreshold: CGFloat = 20.0
         let cornerThreshold: CGFloat = 80.0
@@ -211,9 +218,20 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         self.snapLayoutBar.dismiss()
 
         if let zone = self.activeZone {
-            self.snapEngine.snapFocusedWindow(to: zone)
-            self.activeZone = nil
-            self.activeScreen = nil
+            let windowToSnap = self.currentDraggedWindow ?? self.accessibilityService.getFocusedWindow()
+            if let window = windowToSnap {
+                if let screen = self.activeScreen ?? self.screenService.screenContaining(point: NSEvent.mouseLocation) {
+                    self.snapEngine.snapWindow(window, to: zone, on: screen)
+                } else {
+                    self.snapEngine.snapFocusedWindow(to: zone)
+                }
+            } else {
+                self.snapEngine.snapFocusedWindow(to: zone)
+            }
         }
+
+        self.activeZone = nil
+        self.activeScreen = nil
+        self.currentDraggedWindow = nil
     }
 }
