@@ -15,6 +15,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private var currentDraggedWindow: WindowElement?
     private var dragStartPoint: CGPoint?
     private var isHoldingWindowOrTab: Bool = false
+    private var isDragGestureIgnored: Bool = false
 
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
@@ -79,6 +80,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         self.currentDraggedWindow = nil
         self.dragStartPoint = nil
         self.isHoldingWindowOrTab = false
+        self.isDragGestureIgnored = false
 
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
@@ -93,6 +95,23 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private func handleEvent(type: CGEventType, event: CGEvent) {
         let mouseLocation = NSEvent.mouseLocation
 
+        // If user is currently dragging an interactive resize divider, completely suppress
+        // the top Snap Bar modal and snap previews so they never get in the way.
+        if PairedResizeManager.shared.isDraggingDivider {
+            if snapLayoutBar.presentationState != .hidden {
+                snapLayoutBar.dismiss(animated: false)
+            }
+            if previewOverlay.isVisible {
+                previewOverlay.dismiss()
+            }
+            self.activeZone = nil
+            self.currentDraggedWindow = nil
+            self.dragStartPoint = nil
+            self.isHoldingWindowOrTab = false
+            self.isDragGestureIgnored = false
+            return
+        }
+
         switch type {
         case .leftMouseDragged:
             handleDrag(at: mouseLocation)
@@ -104,17 +123,73 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     }
 
     private func handleDrag(at point: CGPoint) {
+        // If this drag sequence was already determined to start in an invalid zone
+        // (e.g. In-app editor body, desktop wallpaper, menu bar, or dock), ignore all remaining drag events until mouseUp
+        if isDragGestureIgnored {
+            return
+        }
+
         guard let screen = screenService.screenContaining(point: point) else { return }
 
-        // Capture the dragged window at the start of movement before focus changes
+        // Capture and validate the dragged window at the exact start of movement
         if currentDraggedWindow == nil {
-            currentDraggedWindow = accessibilityService.getFocusedWindow()
+            // Layer 1: Exclude Menu Bar and Dock.
+            // In Cocoa coordinates, point.y >= screen.visibleFrame.maxY - 1.0 is in the Menu Bar,
+            // and !screen.visibleFrame.contains(point) covers Dock or off-screen coordinates.
+            let visibleFrame = screen.visibleFrame
+            if !visibleFrame.contains(point) || point.y >= (visibleFrame.maxY - 1.0) {
+                isDragGestureIgnored = true
+                return
+            }
+
+            guard let primaryScreen = screenService.primaryScreen ?? NSScreen.screens.first else {
+                isDragGestureIgnored = true
+                return
+            }
+            let primaryHeight = primaryScreen.frame.height
+
+            // Layer 2: Hit-test the actual element under the cursor position.
+            // This prevents attributing clicks on empty desktop to the last focused application.
+            let axPoint = ScreenGeometry.cocoaPointToAX(cocoaPoint: point, primaryScreenHeight: primaryHeight)
+            var candidateWindow = accessibilityService.getWindowUnderPoint(axPoint)
+
+            // Fallback: If getWindowUnderPoint didn't resolve (e.g. non-standard custom element),
+            // allow focused window ONLY IF the cursor is physically inside the focused window's frame.
+            if candidateWindow == nil,
+               let focused = accessibilityService.getFocusedWindow(),
+               let focusedFrame = focused.cocoaFrame(primaryScreenHeight: primaryHeight),
+               focusedFrame.contains(point) {
+                candidateWindow = focused
+            }
+
+            guard let targetWindow = candidateWindow else {
+                isDragGestureIgnored = true
+                return
+            }
+
+            // Layer 3: Exclude Desktop wallpaper (AXDesktopWindow) and MacSnap's own interface windows.
+            if targetWindow.isDesktopWindow || targetWindow.pid == ProcessInfo.processInfo.processIdentifier {
+                isDragGestureIgnored = true
+                return
+            }
+
+            // Layer 4: Validate that the click started strictly in the upper header / tab bar region.
+            // Grabbing or selecting in the window body (editor text, buttons, web content) must NEVER trigger snapping.
+            guard targetWindow.isPointInHeaderRegion(point, primaryScreenHeight: primaryHeight) else {
+                isDragGestureIgnored = true
+                return
+            }
+
+            currentDraggedWindow = targetWindow
             dragStartPoint = point
         }
 
-        // Determine if user is actively dragging a window/tab
+        // Layer 5: Intentional drag threshold.
+        // Requires a deliberate 14pt movement before activating the Snap Layout Bar or snap zones,
+        // preventing micro-jitter from simple clicks on tabs or window controls.
         let dragDist = hypot(point.x - (dragStartPoint?.x ?? point.x), point.y - (dragStartPoint?.y ?? point.y))
-        if !isHoldingWindowOrTab && dragDist >= 4.0 && currentDraggedWindow != nil {
+        let dragThreshold: CGFloat = 14.0
+        if !isHoldingWindowOrTab && dragDist >= dragThreshold && currentDraggedWindow != nil {
             isHoldingWindowOrTab = true
         }
 
@@ -128,6 +203,10 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
                 snapLayoutBar.presentPill(on: screen)
             }
         }
+
+        // Only evaluate hover on SnapLayoutBar and screen edges when the user is actively
+        // dragging a window or tab past the intentional movement threshold.
+        guard isHoldingWindowOrTab else { return }
 
         let visibleFrame = screen.visibleFrame
         let edgeThreshold: CGFloat = 20.0
@@ -230,17 +309,12 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         self.previewOverlay.dismiss()
         self.snapLayoutBar.dismiss()
 
-        if let zone = self.activeZone {
-            let windowToSnap = self.currentDraggedWindow ?? self.accessibilityService.getFocusedWindow()
+        if self.isHoldingWindowOrTab, let zone = self.activeZone, let window = self.currentDraggedWindow {
             let targetScreen = self.activeScreen ?? self.screenService.screenContaining(point: NSEvent.mouseLocation)
 
-            if let window = windowToSnap, let screen = targetScreen {
+            if let screen = targetScreen {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
                     self?.snapEngine.snapWindow(window, to: zone, on: screen)
-                }
-            } else if windowToSnap != nil {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
-                    self?.snapEngine.snapFocusedWindow(to: zone)
                 }
             }
         }
@@ -250,5 +324,6 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         self.currentDraggedWindow = nil
         self.dragStartPoint = nil
         self.isHoldingWindowOrTab = false
+        self.isDragGestureIgnored = false
     }
 }

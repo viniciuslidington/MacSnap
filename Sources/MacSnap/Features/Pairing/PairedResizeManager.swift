@@ -41,6 +41,11 @@ public final class PairedResizeManager {
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
 
+    /// Indicates whether an interactive resize divider is actively being dragged on any screen.
+    public var isDraggingDivider: Bool {
+        statesByScreen.values.contains { $0.dividerWindow.isDragging }
+    }
+
     public init(
         screenService: ScreenServiceProtocol = ScreenService.shared,
         accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared

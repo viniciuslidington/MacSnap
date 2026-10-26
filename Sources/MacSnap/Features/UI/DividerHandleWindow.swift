@@ -29,10 +29,16 @@ public final class DividerHandleWindow: NSPanel {
         self.contentView = customView
     }
 
+    /// Indicates whether the user is actively dragging this divider.
+    public var isDragging: Bool {
+        customView.isDragging
+    }
+
     /// Updates the divider based on a `PairedSplit` instance.
     public func update(for pair: PairedSplit) {
         customView.orientation = pair.orientation
         self.setFrame(pair.dividerFrame, display: true)
+        customView.needsDisplay = true
         if !self.isVisible {
             self.orderFrontRegardless()
         }
@@ -66,7 +72,7 @@ final class DividerCustomView: NSView {
     }
 
     private var isHovered = false
-    private var isDragging = false
+    var isDragging = false
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)

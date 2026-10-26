@@ -22,6 +22,27 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
         return titleStr
     }
 
+    /// Window accessibility role (e.g., "AXWindow").
+    public var role: String? {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(rawElement, kAXRoleAttribute as CFString, &value)
+        guard result == .success, let roleStr = value as? String else { return nil }
+        return roleStr
+    }
+
+    /// Window accessibility subrole (e.g., "AXStandardWindow", "AXDesktopWindow", "AXDialog").
+    public var subrole: String? {
+        var value: CFTypeRef?
+        let result = AXUIElementCopyAttributeValue(rawElement, kAXSubroleAttribute as CFString, &value)
+        guard result == .success, let subroleStr = value as? String else { return nil }
+        return subroleStr
+    }
+
+    /// Checks if this element represents the macOS Finder desktop wallpaper window.
+    public var isDesktopWindow: Bool {
+        subrole == "AXDesktopWindow"
+    }
+
     /// Running application instance representing the owning process.
     public var runningApplication: NSRunningApplication? {
         NSRunningApplication(processIdentifier: pid)
@@ -129,5 +150,33 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
         var isSettable: DarwinBoolean = false
         let result = AXUIElementIsAttributeSettable(rawElement, kAXSizeAttribute as CFString, &isSettable)
         return result == .success && isSettable.boolValue
+    }
+
+    /// Determines if a point in Cocoa coordinates falls within the upper header/tab bar region of this window.
+    /// - Parameters:
+    ///   - point: The mouse point in Cocoa coordinates.
+    ///   - primaryScreenHeight: The primary screen height for coordinate translation.
+    ///   - maxHeaderHeight: The maximum height in points from the top edge considered the header/tab bar (default: 65.0).
+    /// - Returns: True if the point is within the upper header/tab bar zone of the window.
+    public func isPointInHeaderRegion(_ point: CGPoint, primaryScreenHeight: CGFloat, maxHeaderHeight: CGFloat = 65.0) -> Bool {
+        guard let frame = cocoaFrame(primaryScreenHeight: primaryScreenHeight) else { return false }
+        return WindowElement.isPointInHeaderRegion(point, windowFrame: frame, maxHeaderHeight: maxHeaderHeight)
+    }
+
+    /// Static calculation to determine if a point falls within a window's upper header/tab bar region.
+    /// - Parameters:
+    ///   - point: The mouse point in Cocoa coordinates.
+    ///   - windowFrame: Window frame in Cocoa coordinates.
+    ///   - maxHeaderHeight: The maximum height in points from the top edge considered the header/tab bar (default: 65.0).
+    /// - Returns: True if the point falls strictly inside the top header/tab bar.
+    public static func isPointInHeaderRegion(_ point: CGPoint, windowFrame: CGRect, maxHeaderHeight: CGFloat = 65.0) -> Bool {
+        let tolerance: CGFloat = 2.0
+        guard point.x >= windowFrame.minX - tolerance && point.x <= windowFrame.maxX + tolerance &&
+              point.y >= windowFrame.minY - tolerance && point.y <= windowFrame.maxY + tolerance else {
+            return false
+        }
+        let headerHeight = min(maxHeaderHeight, windowFrame.height * 0.5)
+        let minHeaderY = windowFrame.maxY - headerHeight
+        return point.y >= minHeaderY && point.y <= windowFrame.maxY + tolerance
     }
 }

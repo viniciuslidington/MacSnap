@@ -87,20 +87,14 @@ public final class PairedSplit: @unchecked Sendable {
     }
 
     /// Exact position of the central divider based on the real edge reached by the first window:
+    /// Coordinate of the divider dividing the two windows based on current ratio.
     /// - If horizontal, returns the X coordinate where the left window ends.
     /// - If vertical, returns the Y coordinate where the top window begins (its bottom edge).
     public var dividerPosition: CGFloat {
-        let primaryHeight = NSScreen.screens.first?.frame.height ?? 1080.0
         switch orientation {
         case .horizontal:
-            if let actualFirst = firstWindow.cocoaFrame(primaryScreenHeight: primaryHeight) {
-                return actualFirst.maxX
-            }
             return visibleFrame.origin.x + (visibleFrame.width * ratio)
         case .vertical:
-            if let actualFirst = firstWindow.cocoaFrame(primaryScreenHeight: primaryHeight) {
-                return actualFirst.minY
-            }
             return visibleFrame.origin.y + (visibleFrame.height * (1.0 - ratio))
         }
     }

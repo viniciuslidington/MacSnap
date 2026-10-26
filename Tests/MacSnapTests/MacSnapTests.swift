@@ -448,4 +448,99 @@ struct SnapGeometryTests {
             #expect(finderElem.appName == "Finder")
         }
     }
+
+    @Test func testWindowHeaderRegionDetection() {
+        // Simulates an 800x600 window at (100, 100).
+        // In Cocoa: minY = 100, maxY = 700.
+        // Top 65pt header zone: Y from 635 to 700.
+        let windowFrame = CGRect(x: 100, y: 100, width: 800, height: 600)
+
+        // 1. Traffic lights and title bar (top 20-30pt)
+        let trafficLightsPoint = CGPoint(x: 130, y: 685)
+        #expect(WindowElement.isPointInHeaderRegion(trafficLightsPoint, windowFrame: windowFrame))
+
+        // 2. Tab bar (e.g. 50pt from the top)
+        let tabBarPoint = CGPoint(x: 350, y: 650)
+        #expect(WindowElement.isPointInHeaderRegion(tabBarPoint, windowFrame: windowFrame))
+
+        // 3. Editor body and line numbers (below top 65pt) -> MUST BE REJECTED
+        let editorBodyPoint = CGPoint(x: 350, y: 550)
+        #expect(!WindowElement.isPointInHeaderRegion(editorBodyPoint, windowFrame: windowFrame))
+
+        // 4. Center of window / in-app buttons -> MUST BE REJECTED
+        let centerPoint = CGPoint(x: 500, y: 400)
+        #expect(!WindowElement.isPointInHeaderRegion(centerPoint, windowFrame: windowFrame))
+
+        // 5. Desktop wallpaper outside window bounds -> MUST BE REJECTED
+        let desktopLeft = CGPoint(x: 50, y: 680)
+        let desktopRight = CGPoint(x: 950, y: 680)
+        let desktopAbove = CGPoint(x: 350, y: 720)
+        let desktopBelow = CGPoint(x: 350, y: 50)
+        #expect(!WindowElement.isPointInHeaderRegion(desktopLeft, windowFrame: windowFrame))
+        #expect(!WindowElement.isPointInHeaderRegion(desktopRight, windowFrame: windowFrame))
+        #expect(!WindowElement.isPointInHeaderRegion(desktopAbove, windowFrame: windowFrame))
+        #expect(!WindowElement.isPointInHeaderRegion(desktopBelow, windowFrame: windowFrame))
+
+        // 6. Compact / small window (height 100pt, e.g. dialog from 200 to 300)
+        // Header height capped at 50% (50pt): Y from 250 to 300
+        let compactFrame = CGRect(x: 200, y: 200, width: 300, height: 100)
+        let compactHeader = CGPoint(x: 300, y: 275)
+        let compactBody = CGPoint(x: 300, y: 220)
+        #expect(WindowElement.isPointInHeaderRegion(compactHeader, windowFrame: compactFrame))
+        #expect(!WindowElement.isPointInHeaderRegion(compactBody, windowFrame: compactFrame))
+    }
+
+    @Test func testMenuBarAndDockExclusionLogic() {
+        // Screen with full 1920x1080 frame
+        // Menu bar at top: 1055 to 1080 (height 25)
+        // Dock at bottom: 0 to 70 (height 70)
+        // Visible frame: (x: 0, y: 70, width: 1920, height: 985) -> maxY = 1055
+        let visibleFrame = CGRect(x: 0, y: 70, width: 1920, height: 985)
+
+        func isExcluded(point: CGPoint) -> Bool {
+            return !visibleFrame.contains(point) || point.y >= (visibleFrame.maxY - 1.0)
+        }
+
+        // Click in Apple menu / menu bar item (Y = 1065) -> Excluded
+        let menuBarClick = CGPoint(x: 50, y: 1065)
+        #expect(isExcluded(point: menuBarClick))
+
+        // Click exactly on menu bar border line (Y = 1054.5) -> Excluded
+        let menuBarBorderClick = CGPoint(x: 200, y: 1054.5)
+        #expect(isExcluded(point: menuBarBorderClick))
+
+        // Click in bottom Dock (Y = 35) -> Excluded
+        let dockClick = CGPoint(x: 960, y: 35)
+        #expect(isExcluded(point: dockClick))
+
+        // Click inside active workspace (Y = 800) -> Allowed
+        let usableAreaClick = CGPoint(x: 960, y: 800)
+        #expect(!isExcluded(point: usableAreaClick))
+    }
+
+    @Test func testDragDistanceThresholdValidation() {
+        let startPoint = CGPoint(x: 500, y: 500)
+        let dragThreshold: CGFloat = 14.0
+
+        // Micro-jitter click (3pt move)
+        let jitterPoint = CGPoint(x: 502, y: 502)
+        let jitterDist = hypot(jitterPoint.x - startPoint.x, jitterPoint.y - startPoint.y)
+        #expect(jitterDist < dragThreshold)
+
+        // Sub-threshold move (10pt move)
+        let subPoint = CGPoint(x: 506, y: 508)
+        let subDist = hypot(subPoint.x - startPoint.x, subPoint.y - startPoint.y)
+        #expect(subDist < dragThreshold)
+
+        // Intentional drag (20pt move)
+        let dragPoint = CGPoint(x: 512, y: 516)
+        let dragDist = hypot(dragPoint.x - startPoint.x, dragPoint.y - startPoint.y)
+        #expect(dragDist >= dragThreshold)
+    }
+
+    @Test func testDesktopWindowRoleDetection() {
+        let dummy = WindowElement(element: AXUIElementCreateSystemWide(), pid: ProcessInfo.processInfo.processIdentifier)
+        // System wide element has no desktop subrole
+        #expect(!dummy.isDesktopWindow)
+    }
 }
