@@ -3,7 +3,7 @@ import ServiceManagement
 
 /// Controla o ícone e menu do MacSnap na barra de menus superior do macOS (NSStatusItem).
 @MainActor
-public final class MenuBarController {
+public final class MenuBarController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let accessibilityService: AccessibilityServiceProtocol
     private let snapEngine: WindowSnappingProtocol
@@ -17,7 +17,21 @@ public final class MenuBarController {
         self.accessibilityService = accessibilityService
         self.snapEngine = snapEngine
         self.pairingManager = pairingManager
+        super.init()
         setupStatusItem()
+    }
+
+    public func menuWillOpen(_ menu: NSMenu) {
+        // Atualiza dinamicamente o status da permissão e do item de login cada vez que o menu abrir
+        let isGranted = accessibilityService.isAccessibilityGranted(promptIfNeeded: false)
+        menu.items.first?.title = isGranted ? "✓ Acessibilidade: Habilitada" : "⚠️ Acessibilidade: Requer Permissão"
+
+        for item in menu.items {
+            if item.action == #selector(toggleLaunchAtLogin) {
+                let isLaunchAtLogin = isLoginItemEnabled()
+                item.title = isLaunchAtLogin ? "✓ Iniciar com o Mac" : "Iniciar com o Mac"
+            }
+        }
     }
 
     private func setupStatusItem() {
@@ -74,6 +88,7 @@ public final class MenuBarController {
 
     public func rebuildMenu() {
         let menu = NSMenu()
+        menu.delegate = self
 
         // 1. Indicador de permissões
         let isGranted = accessibilityService.isAccessibilityGranted(promptIfNeeded: false)
@@ -200,10 +215,9 @@ public final class MenuBarController {
     }
 
     @objc private func openAccessibilityPreferences() {
-        if !accessibilityService.isAccessibilityGranted(promptIfNeeded: true) {
-            let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-            NSWorkspace.shared.open(url)
-        }
+        _ = accessibilityService.isAccessibilityGranted(promptIfNeeded: true)
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
     }
 
     @objc private func snapLeft() {

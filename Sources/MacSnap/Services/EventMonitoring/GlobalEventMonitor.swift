@@ -13,6 +13,8 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private var activeZone: SnapZone?
     private var activeScreen: NSScreen?
     private var currentDraggedWindow: WindowElement?
+    private var dragStartPoint: CGPoint?
+    private var isHoldingWindowOrTab: Bool = false
 
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
@@ -70,6 +72,14 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     }
 
     public func stopMonitoring() {
+        self.previewOverlay.dismiss()
+        self.snapLayoutBar.dismiss(animated: false)
+        self.activeZone = nil
+        self.activeScreen = nil
+        self.currentDraggedWindow = nil
+        self.dragStartPoint = nil
+        self.isHoldingWindowOrTab = false
+
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
             if let source = runLoopSource {
@@ -99,6 +109,24 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         // Captura a janela que está sendo arrastada no início do movimento antes que o foco mude
         if currentDraggedWindow == nil {
             currentDraggedWindow = accessibilityService.getFocusedWindow()
+            dragStartPoint = point
+        }
+
+        // Detecta se o usuário está de fato segurando uma aba/janela em arraste
+        let dragDist = hypot(point.x - (dragStartPoint?.x ?? point.x), point.y - (dragStartPoint?.y ?? point.y))
+        if !isHoldingWindowOrTab && dragDist >= 4.0 && currentDraggedWindow != nil {
+            isHoldingWindowOrTab = true
+        }
+
+        // Se estiver segurando a janela/aba, exibe imediatamente a barra colapsada (pílula)
+        // no topo do monitor onde o mouse está localizado, acompanhando a troca de telas
+        if isHoldingWindowOrTab {
+            if snapLayoutBar.presentationState == .hidden {
+                snapLayoutBar.presentPill(on: screen)
+            } else if snapLayoutBar.currentScreen != screen {
+                // Usuário moveu a janela para outro monitor: a pílula migra para o topo do novo monitor
+                snapLayoutBar.presentPill(on: screen)
+            }
         }
 
         let visibleFrame = screen.visibleFrame
@@ -116,29 +144,24 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
         var detectedZone: SnapZone?
 
-        // 1. MONITOR VERTICAL: Tratamento especial com 50/50 no topo/base e 1/3 nas laterais
-        if isPortrait {
-            let topZoneThreshold: CGFloat = 160.0
-            let isInsideBar = snapLayoutBar.frame.insetBy(dx: -20, dy: -20).contains(point)
-            let isApproachingTop = (point.y >= visibleFrame.maxY - topZoneThreshold) || isInsideBar
-
-            if isApproachingTop {
-                // Abre a barra flutuante com layouts otimizados para monitores verticais
-                snapLayoutBar.present(on: screen)
-
-                // Verifica se o usuário está pairando sobre um dos cards da barra
-                if let hoveredBarZone = snapLayoutBar.checkHover(at: point) {
-                    detectedZone = hoveredBarZone
-                } else if isTop {
-                    // Regra: Vértices superiores e borda superior padronizados em 50/50 (Metade Superior)
-                    detectedZone = .topHalf
-                }
+        // 1. Interação com a SnapLayoutBar (Pílula ou Expandida)
+        if snapLayoutBar.presentationState == .pill {
+            // Se o cursor se aproximar da pílula no topo da tela, ela se expande suavemente
+            _ = snapLayoutBar.checkHover(at: point)
+        } else if snapLayoutBar.presentationState == .expanded {
+            let flyoutHitArea = snapLayoutBar.frame.insetBy(dx: -25, dy: -25)
+            if flyoutHitArea.contains(point) {
+                // Cursor está sobre a barra expandida: seleciona o slot correspondente
+                detectedZone = snapLayoutBar.checkHover(at: point)
             } else {
-                snapLayoutBar.dismiss()
+                // Cursor se afastou dos cartões: recolhe de volta para a pílula discreta
+                snapLayoutBar.collapseToPill()
             }
+        }
 
-            // Ações nas outras bordas do monitor vertical
-            if detectedZone == nil {
+        // 2. Ações nas bordas da tela quando nenhuma opção da barra expandida estiver selecionada
+        if detectedZone == nil {
+            if isPortrait {
                 if isBottom {
                     // Regra: Vértices inferiores e borda inferior padronizados em 50/50 (Metade Inferior)
                     detectedZone = .bottomHalf
@@ -154,30 +177,11 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
                     } else {
                         detectedZone = .bottomThird
                     }
-                }
-            }
-        } else {
-            // 2. MONITOR HORIZONTAL (16:9 / Ultrawide)
-            let topZoneThreshold: CGFloat = 160.0
-            let isInsideBar = snapLayoutBar.frame.insetBy(dx: -20, dy: -20).contains(point)
-            let isApproachingTop = (point.y >= visibleFrame.maxY - topZoneThreshold) || isInsideBar
-
-            if isApproachingTop {
-                // Abre a barra flutuante com layouts adaptados para telas horizontais (50/50, 3 colunas, 2/3, 1/3, quadrantes, maximizar)
-                snapLayoutBar.present(on: screen)
-
-                // Verifica se o usuário está pairando sobre um dos cards da barra
-                if let hoveredBarZone = snapLayoutBar.checkHover(at: point) {
-                    detectedZone = hoveredBarZone
-                } else if isTop {
-                    detectedZone = .maximize
+                } else if isTop && snapLayoutBar.presentationState != .expanded {
+                    detectedZone = .topHalf
                 }
             } else {
-                snapLayoutBar.dismiss()
-            }
-
-            if detectedZone == nil {
-                // Detecção de cantos (quadrantes)
+                // Detecção de cantos (quadrantes) no monitor horizontal
                 if isLeft && isNearTop {
                     detectedZone = .topLeftQuarter
                 } else if isRight && isNearTop {
@@ -187,7 +191,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
                 } else if isRight && isNearBottom {
                     detectedZone = .bottomRightQuarter
                 // Metades e maximização
-                } else if isTop {
+                } else if isTop && snapLayoutBar.presentationState != .expanded {
                     detectedZone = .maximize
                 } else if isLeft {
                     detectedZone = .leftHalf
@@ -228,19 +232,23 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
         if let zone = self.activeZone {
             let windowToSnap = self.currentDraggedWindow ?? self.accessibilityService.getFocusedWindow()
-            if let window = windowToSnap {
-                if let screen = self.activeScreen ?? self.screenService.screenContaining(point: NSEvent.mouseLocation) {
-                    self.snapEngine.snapWindow(window, to: zone, on: screen)
-                } else {
-                    self.snapEngine.snapFocusedWindow(to: zone)
+            let targetScreen = self.activeScreen ?? self.screenService.screenContaining(point: NSEvent.mouseLocation)
+
+            if let window = windowToSnap, let screen = targetScreen {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+                    self?.snapEngine.snapWindow(window, to: zone, on: screen)
                 }
-            } else {
-                self.snapEngine.snapFocusedWindow(to: zone)
+            } else if windowToSnap != nil {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+                    self?.snapEngine.snapFocusedWindow(to: zone)
+                }
             }
         }
 
         self.activeZone = nil
         self.activeScreen = nil
         self.currentDraggedWindow = nil
+        self.dragStartPoint = nil
+        self.isHoldingWindowOrTab = false
     }
 }

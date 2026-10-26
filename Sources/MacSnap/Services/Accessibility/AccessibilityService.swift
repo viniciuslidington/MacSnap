@@ -9,7 +9,23 @@ import Cocoa
 public final class AccessibilityService: AccessibilityServiceProtocol, @unchecked Sendable {
     public static let shared = AccessibilityService()
 
-    public init() {}
+    private var lastActiveApp: NSRunningApplication?
+
+    public init() {
+        // Observa ativações de aplicativos para sempre lembrar a janela/app frontal do usuário
+        // mesmo quando ele clica no menu da barra de status do MacSnap
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notif in
+            guard let app = notif.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            let myPid = ProcessInfo.processInfo.processIdentifier
+            if app.processIdentifier != myPid && app.activationPolicy == .regular {
+                self?.lastActiveApp = app
+            }
+        }
+    }
 
     public func isAccessibilityGranted(promptIfNeeded: Bool) -> Bool {
         let key = "AXTrustedCheckOptionPrompt" as CFString
@@ -17,7 +33,7 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    /// Obtém a janela em primeiro plano com 4 níveis de tolerância a falhas.
+    /// Obtém a janela em primeiro plano com 5 níveis de tolerância a falhas.
     public func getFocusedWindow() -> WindowElement? {
         let myPid = ProcessInfo.processInfo.processIdentifier
 
@@ -40,20 +56,26 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
             }
         }
 
-        // 2. Se o app em foco for o próprio MacSnap (ex: menu ou Snap Bar aberto) ou falhou,
-        // consulta o NSWorkspace pelo aplicativo ativo real do usuário
+        // 2. Se o app em foco for o próprio MacSnap (ex: menu da status bar aberto),
+        // recorre ao último aplicativo regular ativo registrado
+        if targetAppElement == nil, let lastApp = lastActiveApp, !lastApp.isTerminated, lastApp.processIdentifier != myPid {
+            targetPid = lastApp.processIdentifier
+            targetAppElement = AXUIElementCreateApplication(targetPid)
+        }
+
+        // 3. Consulta o NSWorkspace pelo aplicativo ativo real do usuário
         if targetAppElement == nil {
             let candidateApp = NSWorkspace.shared.runningApplications.first(where: {
                 $0.isActive && $0.processIdentifier != myPid && $0.activationPolicy == .regular
             }) ?? NSWorkspace.shared.menuBarOwningApplication ?? NSWorkspace.shared.frontmostApplication
 
-            if let validApp = candidateApp, validApp.processIdentifier != myPid {
+            if let validApp = candidateApp, validApp.processIdentifier != myPid && validApp.activationPolicy == .regular {
                 targetPid = validApp.processIdentifier
                 targetAppElement = AXUIElementCreateApplication(targetPid)
             }
         }
 
-        // 3. Se encontrou o aplicativo alvo, busca sua janela ativa usando estratégia em cascata:
+        // 4. Se encontrou o aplicativo alvo, busca sua janela ativa usando estratégia em cascata:
         //    a) kAXFocusedWindowAttribute
         //    b) kAXMainWindowAttribute
         //    c) kAXWindowsAttribute (primeira janela válida)
@@ -63,7 +85,25 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
             }
         }
 
-        // 4. Último fallback: tenta encontrar a janela sob a posição atual do cursor
+        // 5. Consulta a lista global de janelas no WindowServer (CGWindowList) para localizar a
+        // janela visível de nível 0 (normal) mais ao topo na tela que não pertença ao MacSnap
+        let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        for win in windowList {
+            let layer = win[kCGWindowLayer as String] as? Int ?? -1
+            let pid = win[kCGWindowOwnerPID as String] as? pid_t ?? 0
+            let bounds = win[kCGWindowBounds as String] as? [String: Any] ?? [:]
+            let w = bounds["Width"] as? Double ?? 0
+            let h = bounds["Height"] as? Double ?? 0
+
+            if layer == 0 && pid != myPid && pid != 0 && w > 120 && h > 100 {
+                let app = AXUIElementCreateApplication(pid)
+                if let win = extractWindow(from: app, pid: pid) {
+                    return win
+                }
+            }
+        }
+
+        // 6. Último fallback: tenta encontrar a janela sob a posição atual do cursor
         let mouseLocation = NSEvent.mouseLocation
         if let primaryScreen = NSScreen.screens.first {
             let axPoint = ScreenGeometry.cocoaPointToAX(cocoaPoint: mouseLocation, primaryScreenHeight: primaryScreen.frame.height)

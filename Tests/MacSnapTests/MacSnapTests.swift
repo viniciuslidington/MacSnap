@@ -190,6 +190,106 @@ struct SnapGeometryTests {
         #expect(previewView?.subviews.count == 2)
         #expect(previewView?.subviews.first is NSVisualEffectView)
         #expect(previewView?.subviews.last is PreviewOverlayCanvasView)
+
+        // Garante que o modal fique estritamente à frente do retângulo de prévia
+        #expect(barWindow.level > previewWindow.level)
+    }
+
+    @MainActor
+    @Test func testSingleSlotHighlightingInSnapBar() {
+        let barWindow = SnapLayoutBarWindow()
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
+        barWindow.present(on: screen)
+        #expect(barWindow.totalSlotsCount > 0)
+        #expect(barWindow.currentlyHoveredSlotID == nil)
+
+        guard let rect0 = barWindow.slotRect(at: 0),
+              let rect1 = barWindow.slotRect(at: 1) else {
+            Issue.record("Slots não foram inicializados corretamente")
+            return
+        }
+
+        let pt0 = barWindow.convertPoint(toScreen: CGPoint(x: rect0.midX, y: rect0.midY))
+        let zone0 = barWindow.checkHover(at: pt0)
+        #expect(zone0 != nil)
+        #expect(barWindow.currentlyHoveredSlotID == 0)
+
+        let pt1 = barWindow.convertPoint(toScreen: CGPoint(x: rect1.midX, y: rect1.midY))
+        let zone1 = barWindow.checkHover(at: pt1)
+        #expect(zone1 != nil)
+        #expect(barWindow.currentlyHoveredSlotID == 1)
+
+        barWindow.dismiss()
+        #expect(barWindow.currentlyHoveredSlotID == nil)
+    }
+
+    @MainActor
+    @Test func testPortraitSlotsIndependentHighlightingForIdenticalZones() {
+        let barWindow = SnapLayoutBarWindow()
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
+        barWindow.present(on: screen)
+        // Força modo retrato para inspecionar os cartões verticais
+        barWindow.isPortrait = true
+        #expect(barWindow.totalSlotsCount == 10)
+
+        // Slot 2 = Cartão 2 (Topo 1/3) -> zone .topThird
+        // Slot 7 = Cartão 4 (Topo 1/3 do Base 2/3) -> zone .topThird
+        guard let rectSlot2 = barWindow.slotRect(at: 2),
+              let rectSlot7 = barWindow.slotRect(at: 7) else {
+            Issue.record("Slots 2 e 7 verticais devem existir")
+            return
+        }
+
+        // Paira sobre o Slot 7 (Topo 1/3 no cartão Assimétrico Invertido)
+        let pt7 = barWindow.convertPoint(toScreen: CGPoint(x: rectSlot7.midX, y: rectSlot7.midY))
+        let zone7 = barWindow.checkHover(at: pt7)
+        #expect(zone7 == .topThird)
+        // Apenas o slot 7 deve estar com highlight ativo!
+        #expect(barWindow.currentlyHoveredSlotID == 7)
+        #expect(barWindow.currentlyHoveredSlotID != 2)
+
+        // Agora move para o Slot 2 (Topo 1/3 no cartão de 3 terços)
+        let pt2 = barWindow.convertPoint(toScreen: CGPoint(x: rectSlot2.midX, y: rectSlot2.midY))
+        let zone2 = barWindow.checkHover(at: pt2)
+        #expect(zone2 == .topThird)
+        // Apenas o slot 2 deve estar com highlight ativo!
+        #expect(barWindow.currentlyHoveredSlotID == 2)
+        #expect(barWindow.currentlyHoveredSlotID != 7)
+
+        barWindow.dismiss()
+    }
+
+    @MainActor
+    @Test func testSnapLayoutBarPillAndExpandedStateTransitions() {
+        let barWindow = SnapLayoutBarWindow()
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
+        // 1. Inicialmente oculto
+        #expect(barWindow.presentationState == .hidden)
+
+        // 2. Apresenta como pílula achatada (Pill Mode)
+        barWindow.presentPill(on: screen, animated: false)
+        #expect(barWindow.presentationState == .pill)
+        #expect(barWindow.frame.width == 220)
+        #expect(barWindow.frame.height == 24)
+
+        // 3. Expande ao detectar hover
+        barWindow.expand(animated: false)
+        #expect(barWindow.presentationState == .expanded)
+        #expect(barWindow.frame.height == 94)
+        #expect(barWindow.totalSlotsCount > 0)
+
+        // 4. Recolhe de volta para pílula quando o cursor se afasta
+        barWindow.collapseToPill(animated: false)
+        #expect(barWindow.presentationState == .pill)
+        #expect(barWindow.frame.width == 220)
+        #expect(barWindow.frame.height == 24)
+
+        // 5. Dispensa
+        barWindow.dismiss(animated: false)
+        #expect(barWindow.presentationState == .hidden)
     }
 
     @MainActor

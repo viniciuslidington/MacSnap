@@ -19,8 +19,8 @@ public final class PreviewOverlayWindow: NSWindow {
 
         self.isOpaque = false
         self.backgroundColor = .clear
-        // Nível .screenSaver garante que a prévia fique sempre à frente de qualquer janela focada
-        self.level = .screenSaver
+        // Nível inferior ao SnapLayoutBarWindow para garantir que a barra fique sempre por cima da prévia
+        self.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue - 5)
         self.ignoresMouseEvents = true
         self.hasShadow = true
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
@@ -45,7 +45,7 @@ public final class PreviewOverlayWindow: NSWindow {
             NSAnimationContext.runAnimationGroup { context in
                 context.duration = 0.15
                 context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                self.animator().alphaValue = 1.0
+                self.animator().alphaValue = 0.92
             }
         } else {
             if animated {
@@ -103,6 +103,7 @@ final class PreviewContentView: NSView {
         visualEffectView.wantsLayer = true
         visualEffectView.layer?.cornerRadius = cornerRadius
         visualEffectView.layer?.masksToBounds = true
+        visualEffectView.alphaValue = 0.80
         addSubview(visualEffectView)
 
         canvasView.onDraw = { [weak self] dirtyRect in
@@ -126,19 +127,19 @@ final class PreviewContentView: NSView {
         let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
         let path = NSBezierPath(roundedRect: innerRect, xRadius: cornerRadius, yRadius: cornerRadius)
 
-        // 1. Fundo translúcido cinza claro (Apple Glass UI)
+        // 1. Fundo translúcido cinza claro bem mais transparente (Apple Glass UI)
         let glassFillColor = isDark
-            ? NSColor(white: 0.95, alpha: 0.16)
-            : NSColor(white: 0.70, alpha: 0.22)
+            ? NSColor(white: 1.0, alpha: 0.06)
+            : NSColor(white: 1.0, alpha: 0.10)
         glassFillColor.setFill()
         path.fill()
 
         // 2. Borda externa luminosa de vidro lapidado (Specular Rim)
         let outerRimColor = isDark
-            ? NSColor(white: 1.0, alpha: 0.60)
-            : NSColor(white: 0.30, alpha: 0.40)
+            ? NSColor(white: 1.0, alpha: 0.45)
+            : NSColor(white: 0.20, alpha: 0.28)
         outerRimColor.setStroke()
-        path.lineWidth = 1.8
+        path.lineWidth = 1.4
         path.stroke()
 
         // 3. Reflexo interno de luz para acabamento refinado de vidro (Inner Specular Glow)
@@ -150,10 +151,10 @@ final class PreviewContentView: NSView {
                 yRadius: max(0, cornerRadius - 1.5)
             )
             let innerGlowColor = isDark
-                ? NSColor(white: 1.0, alpha: 0.20)
-                : NSColor(white: 1.0, alpha: 0.50)
+                ? NSColor(white: 1.0, alpha: 0.12)
+                : NSColor(white: 1.0, alpha: 0.35)
             innerGlowColor.setStroke()
-            innerPath.lineWidth = 1.0
+            innerPath.lineWidth = 0.8
             innerPath.stroke()
         }
     }

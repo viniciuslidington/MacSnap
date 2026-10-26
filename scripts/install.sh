@@ -52,9 +52,17 @@ if [ -f "$PROJECT_DIR/Resources/AppIcon.icns" ]; then
     cp "$PROJECT_DIR/Resources/AppIcon.icns" "$TMP_APP/Contents/Resources/AppIcon.icns"
 fi
 
-# 3. Assinatura Ad-hoc para execução segura no macOS
-echo "🔏 Aplicando assinatura ad-hoc (codesign)..."
-codesign --force --deep --sign - "$TMP_APP"
+# 3. Assinatura do pacote (codesign)
+# Busca certificado de desenvolvimento Apple no chaveiro do usuário para fixar uma
+# Designated Requirement estável (evitando que o macOS invalide a permissão de Acessibilidade a cada compilação).
+DEV_CERT=$(security find-identity -p codesigning -v | grep "Apple Development" | head -n 1 | awk -F '"' '{print $2}')
+if [ -n "$DEV_CERT" ]; then
+    echo "🔏 Assinando com certificado estável: $DEV_CERT..."
+    codesign --force --deep --sign "$DEV_CERT" "$TMP_APP"
+else
+    echo "🔏 Aplicando assinatura ad-hoc (codesign)..."
+    codesign --force --deep --sign - "$TMP_APP"
+fi
 
 # 4. Instala em /Applications
 echo "📂 Copiando para $DEST_DIR..."
@@ -85,6 +93,10 @@ cat <<EOF > "$LAUNCH_AGENT_PATH"
     <false/>
     <key>ProcessType</key>
     <string>Interactive</string>
+    <key>StandardOutPath</key>
+    <string>/tmp/MacSnap.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/MacSnap.log</string>
 </dict>
 </plist>
 EOF

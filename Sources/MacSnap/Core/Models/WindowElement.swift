@@ -62,15 +62,42 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
             return false
         }
 
-        // Tenta aplicar o tamanho primeiro para evitar colisão com a borda do monitor se a janela estiver encolhendo,
-        // seguido pela nova posição.
-        let sizeRes = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
-        let posRes = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
+        // Multi-passo para garantir que o WindowServer não faça clamp:
+        // No macOS, a ordem entre posição e tamanho é crucial:
+        // Se aplicarmos tamanho primeiro enquanto a janela estiver em outra posição (ex: centro/canto da tela),
+        // o WindowServer limita (clamp) o tamanho à borda visível da tela antes que a janela seja movida,
+        // fazendo a janela ficar menor que a tela ("faltando um pedaço").
+        // Aplicando posição -> tamanho -> posição -> tamanho garantimos que tanto janelas em expansão
+        // quanto janelas em redução atinjam exatamente o frame alvo sem truncamento.
 
-        // Se falhou (por exemplo, a janela está crescendo e precisa ser movida antes de expandir), inverte a ordem
-        if sizeRes != .success || posRes != .success {
-            _ = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
-            _ = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
+        // Passada 1: Move para a nova posição primeiro para desobstruir o espaço de expansão
+        let posRes1 = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
+        let sizeRes1 = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
+
+        if posRes1 == .apiDisabled || sizeRes1 == .apiDisabled {
+            print("[MacSnap] ❌ ERRO DE ACESSIBILIDADE: kAXErrorAPIDisabled ao tentar alterar a janela PID \(pid).")
+            print("[MacSnap] 💡 Vá em Ajustes do Sistema > Privacidade e Segurança > Acessibilidade e habilite o MacSnap.")
+            return false
+        }
+
+        // Passada 2: Aplica posição e tamanho novamente.
+        // Se a janela estava encolhendo, a posição inicial pode ter sido clamped até o tamanho encolher;
+        // agora que o tamanho foi reduzido, a posição atinge o alvo exato.
+        // Se a janela estava crescendo, a posição inicial abriu o espaço e agora o tamanho atinge o alvo exato.
+        _ = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
+        _ = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
+
+        // Passada 3 (Confirmação): se a janela divergir por mais de 4px, reforça a posição e tamanho finais.
+        if let current = self.axFrame {
+            let dw = abs(current.width - newAXFrame.width)
+            let dh = abs(current.height - newAXFrame.height)
+            let dx = abs(current.origin.x - newAXFrame.origin.x)
+            let dy = abs(current.origin.y - newAXFrame.origin.y)
+
+            if dw > 4 || dh > 4 || dx > 4 || dy > 4 {
+                _ = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
+                _ = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
+            }
         }
 
         return true
