@@ -94,11 +94,12 @@ final class SnapLayoutBarView: NSView {
     var isPortrait: Bool = false {
         didSet {
             rebuildSlots()
-            needsDisplay = true
+            canvasView.needsDisplay = true
         }
     }
 
     private let visualEffectView = NSVisualEffectView()
+    private let canvasView = SnapBarCanvasView()
     private var slots: [LayoutSlot] = []
     private var hoveredZone: SnapZone?
 
@@ -123,17 +124,25 @@ final class SnapLayoutBarView: NSView {
         visualEffectView.wantsLayer = true
         visualEffectView.layer?.cornerRadius = 16
         visualEffectView.layer?.masksToBounds = true
-        addSubview(visualEffectView, positioned: .below, relativeTo: nil)
+        addSubview(visualEffectView)
+
+        canvasView.onDraw = { [weak self] rect in
+            self?.drawCanvas(in: rect)
+        }
+        addSubview(canvasView)
     }
 
     override func layout() {
         super.layout()
         visualEffectView.frame = bounds
+        canvasView.frame = bounds
+        rebuildSlots()
+        canvasView.needsDisplay = true
     }
 
     func resetHover() {
         hoveredZone = nil
-        needsDisplay = true
+        canvasView.needsDisplay = true
     }
 
     func updateHover(at point: CGPoint) -> SnapZone? {
@@ -141,7 +150,7 @@ final class SnapLayoutBarView: NSView {
             if slot.rect.contains(point) {
                 if hoveredZone != slot.zone {
                     hoveredZone = slot.zone
-                    needsDisplay = true
+                    canvasView.needsDisplay = true
                 }
                 return slot.zone
             }
@@ -149,7 +158,7 @@ final class SnapLayoutBarView: NSView {
 
         if hoveredZone != nil {
             hoveredZone = nil
-            needsDisplay = true
+            canvasView.needsDisplay = true
         }
         return nil
     }
@@ -351,8 +360,7 @@ final class SnapLayoutBarView: NSView {
         ))
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
+    func drawCanvas(in dirtyRect: NSRect) {
         if slots.isEmpty { rebuildSlots() }
 
         let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
@@ -360,15 +368,15 @@ final class SnapLayoutBarView: NSView {
         // 1. Container Apple Glass com borda e lavagem cinza claro translúcida
         let bgPath = NSBezierPath(roundedRect: bounds, xRadius: 16, yRadius: 16)
         let containerTint = isDark
-            ? NSColor(white: 0.12, alpha: 0.40)
-            : NSColor(white: 0.96, alpha: 0.55)
+            ? NSColor(white: 0.12, alpha: 0.45)
+            : NSColor(white: 0.96, alpha: 0.65)
         containerTint.setFill()
         bgPath.fill()
 
         // Borda externa de vidro translúcido
         let containerRim = isDark
-            ? NSColor(white: 1.0, alpha: 0.28)
-            : NSColor(white: 0.0, alpha: 0.15)
+            ? NSColor(white: 1.0, alpha: 0.30)
+            : NSColor(white: 0.0, alpha: 0.18)
         containerRim.setStroke()
         bgPath.lineWidth = 1.0
         bgPath.stroke()
@@ -381,17 +389,17 @@ final class SnapLayoutBarView: NSView {
             if isHovered {
                 // Estado Hover: Vidro translúcido cinza claro iluminado (Apple Glass)
                 let hoverFill = isDark
-                    ? NSColor(white: 1.0, alpha: 0.35)
-                    : NSColor(white: 0.85, alpha: 0.45)
+                    ? NSColor(white: 1.0, alpha: 0.38)
+                    : NSColor(white: 0.85, alpha: 0.55)
                 hoverFill.setFill()
                 slotPath.fill()
 
                 // Borda especular de alto contraste
                 let hoverStroke = isDark
-                    ? NSColor(white: 1.0, alpha: 0.90)
-                    : NSColor(white: 0.15, alpha: 0.85)
+                    ? NSColor.white
+                    : NSColor(white: 0.10, alpha: 0.90)
                 hoverStroke.setStroke()
-                slotPath.lineWidth = 1.8
+                slotPath.lineWidth = 2.0
                 slotPath.stroke()
 
                 // Brilho especular interno no slot
@@ -399,23 +407,23 @@ final class SnapLayoutBarView: NSView {
                 if innerSlotRect.width > 0 && innerSlotRect.height > 0 {
                     let innerSlotPath = NSBezierPath(roundedRect: innerSlotRect, xRadius: 5, yRadius: 5)
                     let innerGlow = isDark
-                        ? NSColor(white: 1.0, alpha: 0.25)
-                        : NSColor(white: 1.0, alpha: 0.60)
+                        ? NSColor(white: 1.0, alpha: 0.30)
+                        : NSColor(white: 1.0, alpha: 0.65)
                     innerGlow.setStroke()
                     innerSlotPath.lineWidth = 0.8
                     innerSlotPath.stroke()
                 }
             } else {
-                // Estado Normal: Placa sutil translúcida
+                // Estado Normal: Placa sutil translúcida cinza claro bem visível
                 let normalFill = isDark
-                    ? NSColor(white: 1.0, alpha: 0.07)
-                    : NSColor(white: 0.0, alpha: 0.04)
+                    ? NSColor(white: 1.0, alpha: 0.10)
+                    : NSColor(white: 0.0, alpha: 0.06)
                 normalFill.setFill()
                 slotPath.fill()
 
                 let normalStroke = isDark
-                    ? NSColor(white: 1.0, alpha: 0.16)
-                    : NSColor(white: 0.0, alpha: 0.12)
+                    ? NSColor(white: 1.0, alpha: 0.25)
+                    : NSColor(white: 0.0, alpha: 0.20)
                 normalStroke.setStroke()
                 slotPath.lineWidth = 1.0
                 slotPath.stroke()
@@ -426,11 +434,11 @@ final class SnapLayoutBarView: NSView {
             if isHovered {
                 textColor = isDark ? NSColor.white : NSColor.black
             } else {
-                textColor = NSColor.secondaryLabelColor
+                textColor = isDark ? NSColor(white: 0.92, alpha: 0.90) : NSColor(white: 0.15, alpha: 0.85)
             }
 
             let attributes: [NSAttributedString.Key: Any] = [
-                .font: NSFont.systemFont(ofSize: 9.5, weight: isHovered ? .bold : .medium),
+                .font: NSFont.systemFont(ofSize: 10, weight: isHovered ? .bold : .semibold),
                 .foregroundColor: textColor
             ]
             let str = NSAttributedString(string: slot.label, attributes: attributes)
@@ -443,5 +451,15 @@ final class SnapLayoutBarView: NSView {
             )
             str.draw(in: textRect)
         }
+    }
+}
+
+/// Canvas overlay para desenho dos cartões sobre o NSVisualEffectView sem sofrer oclusão de camadas.
+final class SnapBarCanvasView: NSView {
+    var onDraw: ((NSRect) -> Void)?
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        onDraw?(dirtyRect)
     }
 }

@@ -1,6 +1,7 @@
 import Testing
 import CoreGraphics
 import ApplicationServices
+import AppKit
 @testable import MacSnap
 
 struct SnapGeometryTests {
@@ -170,5 +171,24 @@ struct SnapGeometryTests {
         let right23 = SnapZone.rightTwoThirds.targetRect(for: visibleFrame)
         #expect(right23.origin.x == 640)
         #expect(right23.width == 1280)
+    }
+
+    @MainActor
+    @Test func testSnapLayoutBarWindowAndPreviewViewHierarchy() {
+        let barWindow = SnapLayoutBarWindow()
+        let barView = barWindow.contentView
+        #expect(barView != nil)
+        #expect(barView?.subviews.count == 2)
+        // Subview 0 é o backdrop de desfoque (NSVisualEffectView)
+        // Subview 1 é o canvas de desenho dos cartões, garantindo que os itens nunca sejam encobertos
+        #expect(barView?.subviews.first is NSVisualEffectView)
+        #expect(barView?.subviews.last is SnapBarCanvasView)
+
+        let previewWindow = PreviewOverlayWindow()
+        let previewView = previewWindow.contentView
+        #expect(previewView != nil)
+        #expect(previewView?.subviews.count == 2)
+        #expect(previewView?.subviews.first is NSVisualEffectView)
+        #expect(previewView?.subviews.last is PreviewOverlayCanvasView)
     }
 }

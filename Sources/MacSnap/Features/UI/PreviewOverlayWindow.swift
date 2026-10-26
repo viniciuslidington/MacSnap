@@ -80,6 +80,7 @@ public final class PreviewOverlayWindow: NSWindow {
 /// utilizando vidro fosco translúcido, tom cinza claro e reflexos especulares nas bordas.
 final class PreviewContentView: NSView {
     private let visualEffectView = NSVisualEffectView()
+    private let canvasView = PreviewOverlayCanvasView()
     private let margin: CGFloat = 8.0
     private let cornerRadius: CGFloat = 16.0
 
@@ -103,18 +104,22 @@ final class PreviewContentView: NSView {
         visualEffectView.layer?.cornerRadius = cornerRadius
         visualEffectView.layer?.masksToBounds = true
         addSubview(visualEffectView)
+
+        canvasView.onDraw = { [weak self] dirtyRect in
+            self?.drawGlassOverlay(in: dirtyRect)
+        }
+        addSubview(canvasView)
     }
 
     override func layout() {
         super.layout()
         let innerRect = bounds.insetBy(dx: margin, dy: margin)
         visualEffectView.frame = innerRect
-        needsDisplay = true
+        canvasView.frame = bounds
+        canvasView.needsDisplay = true
     }
 
-    override func draw(_ dirtyRect: NSRect) {
-        super.draw(dirtyRect)
-
+    func drawGlassOverlay(in dirtyRect: NSRect) {
         let innerRect = bounds.insetBy(dx: margin, dy: margin)
         guard innerRect.width > 0 && innerRect.height > 0 else { return }
 
@@ -151,5 +156,15 @@ final class PreviewContentView: NSView {
             innerPath.lineWidth = 1.0
             innerPath.stroke()
         }
+    }
+}
+
+/// Canvas overlay para desenho da borda e brilho do preview sobre o NSVisualEffectView.
+final class PreviewOverlayCanvasView: NSView {
+    var onDraw: ((NSRect) -> Void)?
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        onDraw?(dirtyRect)
     }
 }
