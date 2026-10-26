@@ -10,10 +10,10 @@ Gerenciador nativo de janelas para macOS construído em **Swift puro**, trazendo
    - Arrastar a janela para a borda esquerda/direita: divide a tela em metades (50/50).
    - Arrastar para o topo: maximiza a janela respeitando a barra de menus e o Dock.
    - Arrastar para os quatro cantos: divide a tela em quadrantes (25%).
-2. **Preview Overlay Translúcido**:
-   - Sombra estilizada em efeito *frosted glass* (`NSVisualEffectView`) que mostra a área antes de você soltar a janela.
+2. **Apple Glass UI & Preview Translúcido**:
+   - Efeito *frosted glass* translúcido (`NSVisualEffectView` com material popover vibrante) com tom cinza claro e bordas especulares lapidadas com brilho interno, inspirado na linguagem visual nativa da Apple (VisionOS e macOS).
 3. **Snap Bar Adaptativa no Topo (Windows 11 Style)**:
-   - Ao arrastar qualquer janela em direção ao topo da tela, uma barra deslizante em vidro fosco se abre oferecendo templates prontos:
+   - Ao arrastar qualquer janela em direção ao topo da tela, uma barra deslizante em vidro fosco Apple Glass se abre oferecendo templates prontos com destaque em cinza claro translúcido e bordas luminosas:
    - **Telas Horizontais (16:9 / Ultrawide):**
      - **2 Colunas (50/50):** Esquerda e Direita.
      - **3 Colunas (1/3 cada):** Esquerda, Centro e Direita.
@@ -31,7 +31,8 @@ Gerenciador nativo de janelas para macOS construído em **Swift puro**, trazendo
    - Quando duas janelas são posicionadas lado a lado ou topo/base, uma **barra divisória flutuante interativa** (`DividerHandleWindow`) surge na junção.
    - Cursor adaptativo: `⬌` para horizontal e `⬍` para vertical.
    - **Atração Magnética Suave:** Ao arrastar perto de 50/50, 33/67 ou 67/33, o divisor puxa suavemente para facilitar travar a proporção.
-5. **Ícone na Barra de Menus (`NSStatusItem`)**:
+5. **Ícone Vetorizado na Barra de Menus (`NSStatusItem`)**:
+   - Ícone exclusivo vetorizado em proporção nativa Retina com estilo visual de janelas emparelhadas e barras de título macOS.
    - Menu dedicado com submenus para layouts horizontais (16:9) e verticais, além de checagem de permissões.
    - Roda como aplicativo de fundo (`LSUIElement` / `.accessory`), sem poluir o Dock.
 

@@ -22,7 +22,7 @@ public final class PreviewOverlayWindow: NSWindow {
         // Nível .screenSaver garante que a prévia fique sempre à frente de qualquer janela focada
         self.level = .screenSaver
         self.ignoresMouseEvents = true
-        self.hasShadow = false
+        self.hasShadow = true
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
 
         self.contentView = previewView
@@ -76,12 +76,12 @@ public final class PreviewOverlayWindow: NSWindow {
     }
 }
 
-/// View personalizada que desenha a borda e o fundo azul de forma rigorosamente uniforme,
-/// calculando margens simétricas nos 4 cantos da janela sem distorções de coordenadas.
+/// View personalizada que renderiza a área de pré-visualização no estilo Apple Glass UI,
+/// utilizando vidro fosco translúcido, tom cinza claro e reflexos especulares nas bordas.
 final class PreviewContentView: NSView {
     private let visualEffectView = NSVisualEffectView()
     private let margin: CGFloat = 8.0
-    private let cornerRadius: CGFloat = 14.0
+    private let cornerRadius: CGFloat = 16.0
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -96,7 +96,7 @@ final class PreviewContentView: NSView {
     private func setupEffect() {
         wantsLayer = true
 
-        visualEffectView.material = .hudWindow
+        visualEffectView.material = .popover
         visualEffectView.blendingMode = .behindWindow
         visualEffectView.state = .active
         visualEffectView.wantsLayer = true
@@ -107,7 +107,6 @@ final class PreviewContentView: NSView {
 
     override func layout() {
         super.layout()
-        // Aplica margem exatamente igual nos eixos X e Y
         let innerRect = bounds.insetBy(dx: margin, dy: margin)
         visualEffectView.frame = innerRect
         needsDisplay = true
@@ -119,15 +118,38 @@ final class PreviewContentView: NSView {
         let innerRect = bounds.insetBy(dx: margin, dy: margin)
         guard innerRect.width > 0 && innerRect.height > 0 else { return }
 
+        let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
         let path = NSBezierPath(roundedRect: innerRect, xRadius: cornerRadius, yRadius: cornerRadius)
 
-        // 1. Fundo azul translúcido uniforme
-        NSColor.controlAccentColor.withAlphaComponent(0.22).setFill()
+        // 1. Fundo translúcido cinza claro (Apple Glass UI)
+        let glassFillColor = isDark
+            ? NSColor(white: 0.95, alpha: 0.16)
+            : NSColor(white: 0.70, alpha: 0.22)
+        glassFillColor.setFill()
         path.fill()
 
-        // 2. Borda azul nítida uniforme em todos os 4 lados
-        NSColor.controlAccentColor.withAlphaComponent(0.85).setStroke()
-        path.lineWidth = 2.5
+        // 2. Borda externa luminosa de vidro lapidado (Specular Rim)
+        let outerRimColor = isDark
+            ? NSColor(white: 1.0, alpha: 0.60)
+            : NSColor(white: 0.30, alpha: 0.40)
+        outerRimColor.setStroke()
+        path.lineWidth = 1.8
         path.stroke()
+
+        // 3. Reflexo interno de luz para acabamento refinado de vidro (Inner Specular Glow)
+        let innerGlowRect = innerRect.insetBy(dx: 1.5, dy: 1.5)
+        if innerGlowRect.width > 0 && innerGlowRect.height > 0 {
+            let innerPath = NSBezierPath(
+                roundedRect: innerGlowRect,
+                xRadius: max(0, cornerRadius - 1.5),
+                yRadius: max(0, cornerRadius - 1.5)
+            )
+            let innerGlowColor = isDark
+                ? NSColor(white: 1.0, alpha: 0.20)
+                : NSColor(white: 1.0, alpha: 0.50)
+            innerGlowColor.setStroke()
+            innerPath.lineWidth = 1.0
+            innerPath.stroke()
+        }
     }
 }

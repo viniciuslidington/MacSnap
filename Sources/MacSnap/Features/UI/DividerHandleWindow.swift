@@ -133,17 +133,23 @@ final class DividerCustomView: NSView {
         super.draw(dirtyRect)
 
         let isActive = isHovered || isDragging
-        let accentColor = NSColor.controlAccentColor
-        let baseLineColor = NSColor.separatorColor.withAlphaComponent(0.4)
+        let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
 
-        // 1. Linha divisória fina sutil ao longo de toda a extensão da intercessão
+        // 1. Linha divisória de vidro translúcido ao longo de toda a extensão
+        let activeLineColor = isDark
+            ? NSColor(white: 1.0, alpha: 0.75)
+            : NSColor(white: 0.25, alpha: 0.65)
+        let baseLineColor = isDark
+            ? NSColor(white: 1.0, alpha: 0.20)
+            : NSColor(white: 0.0, alpha: 0.15)
+
         if orientation == .horizontal {
             let lineX = bounds.midX
             let linePath = NSBezierPath()
             linePath.move(to: CGPoint(x: lineX, y: 0))
             linePath.line(to: CGPoint(x: lineX, y: bounds.height))
             linePath.lineWidth = isActive ? 2.0 : 1.0
-            (isActive ? accentColor.withAlphaComponent(0.85) : baseLineColor).setStroke()
+            (isActive ? activeLineColor : baseLineColor).setStroke()
             linePath.stroke()
         } else {
             let lineY = bounds.midY
@@ -151,11 +157,11 @@ final class DividerCustomView: NSView {
             linePath.move(to: CGPoint(x: 0, y: lineY))
             linePath.line(to: CGPoint(x: bounds.width, y: lineY))
             linePath.lineWidth = isActive ? 2.0 : 1.0
-            (isActive ? accentColor.withAlphaComponent(0.85) : baseLineColor).setStroke()
+            (isActive ? activeLineColor : baseLineColor).setStroke()
             linePath.stroke()
         }
 
-        // 2. Pílula central em destaque para indicar o ponto de pega
+        // 2. Pílula central de vidro translúcido (Glass Handle)
         let pillRect: NSRect
         if orientation == .horizontal {
             let pillWidth: CGFloat = isActive ? 6.0 : 4.0
@@ -178,8 +184,21 @@ final class DividerCustomView: NSView {
         }
 
         let path = NSBezierPath(roundedRect: pillRect, xRadius: 3.0, yRadius: 3.0)
-        let pillColor = isDragging ? accentColor : (isHovered ? accentColor.withAlphaComponent(0.9) : NSColor.secondaryLabelColor.withAlphaComponent(0.7))
-        pillColor.setFill()
+        let pillFillColor: NSColor
+        if isDragging {
+            pillFillColor = isDark ? NSColor(white: 1.0, alpha: 0.95) : NSColor(white: 0.15, alpha: 0.95)
+        } else if isHovered {
+            pillFillColor = isDark ? NSColor(white: 1.0, alpha: 0.80) : NSColor(white: 0.25, alpha: 0.80)
+        } else {
+            pillFillColor = isDark ? NSColor(white: 1.0, alpha: 0.45) : NSColor(white: 0.40, alpha: 0.45)
+        }
+        pillFillColor.setFill()
         path.fill()
+
+        // Borda sutil de vidro na pílula
+        let pillStrokeColor = isDark ? NSColor(white: 1.0, alpha: 0.40) : NSColor(white: 0.0, alpha: 0.20)
+        pillStrokeColor.setStroke()
+        path.lineWidth = 0.8
+        path.stroke()
     }
 }

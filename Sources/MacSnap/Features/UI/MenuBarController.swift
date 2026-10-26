@@ -23,15 +23,52 @@ public final class MenuBarController {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem?.button {
-            if let image = NSImage(systemSymbolName: "rectangle.split.2x1", accessibilityDescription: "MacSnap") {
-                image.isTemplate = true
-                button.image = image
-            } else {
-                button.title = "◫"
-            }
+            button.image = makeMenuBarLogo()
+            button.imagePosition = .imageOnly
         }
 
         rebuildMenu()
+    }
+
+    /// Gera o ícone vetorizado oficial do MacSnap no padrão visual do macOS (Retina-ready),
+    /// representando duas janelas emparelhadas com barras de título e vão magnético central.
+    private func makeMenuBarLogo() -> NSImage {
+        let size = NSSize(width: 18, height: 16)
+        let image = NSImage(size: size, flipped: false) { _ in
+            let strokeColor = NSColor.black
+            strokeColor.setStroke()
+
+            // 1. Janela da Esquerda (com bordas arredondadas suaves)
+            let leftRect = NSRect(x: 1.0, y: 1.5, width: 7.0, height: 13.0)
+            let leftPath = NSBezierPath(roundedRect: leftRect, xRadius: 2.0, yRadius: 2.0)
+            leftPath.lineWidth = 1.3
+            leftPath.stroke()
+
+            // Barra de título da janela esquerda
+            let leftHeader = NSBezierPath()
+            leftHeader.move(to: NSPoint(x: 1.8, y: 11.2))
+            leftHeader.line(to: NSPoint(x: 7.2, y: 11.2))
+            leftHeader.lineWidth = 1.0
+            leftHeader.stroke()
+
+            // 2. Janela da Direita
+            let rightRect = NSRect(x: 10.0, y: 1.5, width: 7.0, height: 13.0)
+            let rightPath = NSBezierPath(roundedRect: rightRect, xRadius: 2.0, yRadius: 2.0)
+            rightPath.lineWidth = 1.3
+            rightPath.stroke()
+
+            // Barra de título da janela direita
+            let rightHeader = NSBezierPath()
+            rightHeader.move(to: NSPoint(x: 10.8, y: 11.2))
+            rightHeader.line(to: NSPoint(x: 16.2, y: 11.2))
+            rightHeader.lineWidth = 1.0
+            rightHeader.stroke()
+
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "MacSnap"
+        return image
     }
 
     public func rebuildMenu() {

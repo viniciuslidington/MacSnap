@@ -83,7 +83,7 @@ public final class SnapLayoutBarWindow: NSPanel {
     }
 }
 
-/// View com o desenho visual translúcido dos cards de layout horizontal e vertical.
+/// View com o desenho visual translúcido dos cards de layout no estilo Apple Glass UI.
 final class SnapLayoutBarView: NSView {
     private struct LayoutSlot {
         let rect: CGRect
@@ -98,18 +98,37 @@ final class SnapLayoutBarView: NSView {
         }
     }
 
+    private let visualEffectView = NSVisualEffectView()
     private var slots: [LayoutSlot] = []
     private var hoveredZone: SnapZone?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.cornerRadius = 14
-        layer?.masksToBounds = true
+        setupGlassBacking()
     }
 
     required init?(coder: NSCoder) {
         super.init(coder: coder)
+        setupGlassBacking()
+    }
+
+    private func setupGlassBacking() {
+        wantsLayer = true
+        layer?.cornerRadius = 16
+        layer?.masksToBounds = true
+
+        visualEffectView.material = .popover
+        visualEffectView.blendingMode = .behindWindow
+        visualEffectView.state = .active
+        visualEffectView.wantsLayer = true
+        visualEffectView.layer?.cornerRadius = 16
+        visualEffectView.layer?.masksToBounds = true
+        addSubview(visualEffectView, positioned: .below, relativeTo: nil)
+    }
+
+    override func layout() {
+        super.layout()
+        visualEffectView.frame = bounds
     }
 
     func resetHover() {
@@ -336,38 +355,83 @@ final class SnapLayoutBarView: NSView {
         super.draw(dirtyRect)
         if slots.isEmpty { rebuildSlots() }
 
-        // Fundo translúcido
-        let bgPath = NSBezierPath(roundedRect: bounds, xRadius: 14, yRadius: 14)
-        NSColor.windowBackgroundColor.withAlphaComponent(0.92).setFill()
+        let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
+
+        // 1. Container Apple Glass com borda e lavagem cinza claro translúcida
+        let bgPath = NSBezierPath(roundedRect: bounds, xRadius: 16, yRadius: 16)
+        let containerTint = isDark
+            ? NSColor(white: 0.12, alpha: 0.40)
+            : NSColor(white: 0.96, alpha: 0.55)
+        containerTint.setFill()
         bgPath.fill()
 
-        NSColor.separatorColor.withAlphaComponent(0.5).setStroke()
+        // Borda externa de vidro translúcido
+        let containerRim = isDark
+            ? NSColor(white: 1.0, alpha: 0.28)
+            : NSColor(white: 0.0, alpha: 0.15)
+        containerRim.setStroke()
         bgPath.lineWidth = 1.0
         bgPath.stroke()
 
-        // Desenha cada slot com estado normal ou destacado
+        // 2. Desenho de cada slot com acabamento translúcido cinza claro (Apple Glass)
         for slot in slots {
             let isHovered = (slot.zone == hoveredZone)
-            let slotPath = NSBezierPath(roundedRect: slot.rect, xRadius: 5, yRadius: 5)
+            let slotPath = NSBezierPath(roundedRect: slot.rect, xRadius: 6, yRadius: 6)
 
             if isHovered {
-                NSColor.controlAccentColor.withAlphaComponent(0.35).setFill()
+                // Estado Hover: Vidro translúcido cinza claro iluminado (Apple Glass)
+                let hoverFill = isDark
+                    ? NSColor(white: 1.0, alpha: 0.35)
+                    : NSColor(white: 0.85, alpha: 0.45)
+                hoverFill.setFill()
                 slotPath.fill()
-                NSColor.controlAccentColor.setStroke()
-                slotPath.lineWidth = 2.0
+
+                // Borda especular de alto contraste
+                let hoverStroke = isDark
+                    ? NSColor(white: 1.0, alpha: 0.90)
+                    : NSColor(white: 0.15, alpha: 0.85)
+                hoverStroke.setStroke()
+                slotPath.lineWidth = 1.8
                 slotPath.stroke()
+
+                // Brilho especular interno no slot
+                let innerSlotRect = slot.rect.insetBy(dx: 1.0, dy: 1.0)
+                if innerSlotRect.width > 0 && innerSlotRect.height > 0 {
+                    let innerSlotPath = NSBezierPath(roundedRect: innerSlotRect, xRadius: 5, yRadius: 5)
+                    let innerGlow = isDark
+                        ? NSColor(white: 1.0, alpha: 0.25)
+                        : NSColor(white: 1.0, alpha: 0.60)
+                    innerGlow.setStroke()
+                    innerSlotPath.lineWidth = 0.8
+                    innerSlotPath.stroke()
+                }
             } else {
-                NSColor.controlColor.withAlphaComponent(0.6).setFill()
+                // Estado Normal: Placa sutil translúcida
+                let normalFill = isDark
+                    ? NSColor(white: 1.0, alpha: 0.07)
+                    : NSColor(white: 0.0, alpha: 0.04)
+                normalFill.setFill()
                 slotPath.fill()
-                NSColor.separatorColor.withAlphaComponent(0.3).setStroke()
+
+                let normalStroke = isDark
+                    ? NSColor(white: 1.0, alpha: 0.16)
+                    : NSColor(white: 0.0, alpha: 0.12)
+                normalStroke.setStroke()
                 slotPath.lineWidth = 1.0
                 slotPath.stroke()
             }
 
-            // Texto do slot
+            // Tipografia nítida e refinada
+            let textColor: NSColor
+            if isHovered {
+                textColor = isDark ? NSColor.white : NSColor.black
+            } else {
+                textColor = NSColor.secondaryLabelColor
+            }
+
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.systemFont(ofSize: 9.5, weight: isHovered ? .bold : .medium),
-                .foregroundColor: isHovered ? NSColor.controlAccentColor : NSColor.secondaryLabelColor
+                .foregroundColor: textColor
             ]
             let str = NSAttributedString(string: slot.label, attributes: attributes)
             let textSize = str.size()
