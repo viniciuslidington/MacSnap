@@ -63,6 +63,40 @@ public final class MenuBarController {
         centerItem.target = self
         menu.addItem(centerItem)
 
+        // 3. Submenu de Layouts Verticais
+        let verticalMenu = NSMenu()
+        let topHalfItem = NSMenuItem(title: "Metade Superior", action: #selector(snapTopHalf), keyEquivalent: "")
+        topHalfItem.target = self
+        verticalMenu.addItem(topHalfItem)
+
+        let bottomHalfItem = NSMenuItem(title: "Metade Inferior", action: #selector(snapBottomHalf), keyEquivalent: "")
+        bottomHalfItem.target = self
+        verticalMenu.addItem(bottomHalfItem)
+
+        verticalMenu.addItem(NSMenuItem.separator())
+
+        let topThirdItem = NSMenuItem(title: "Terço Superior (1/3)", action: #selector(snapTopThird), keyEquivalent: "")
+        topThirdItem.target = self
+        verticalMenu.addItem(topThirdItem)
+
+        let middleThirdItem = NSMenuItem(title: "Terço Médio (1/3)", action: #selector(snapMiddleThird), keyEquivalent: "")
+        middleThirdItem.target = self
+        verticalMenu.addItem(middleThirdItem)
+
+        let bottomThirdItem = NSMenuItem(title: "Terço Inferior (1/3)", action: #selector(snapBottomThird), keyEquivalent: "")
+        bottomThirdItem.target = self
+        verticalMenu.addItem(bottomThirdItem)
+
+        verticalMenu.addItem(NSMenuItem.separator())
+
+        let topTwoThirdsItem = NSMenuItem(title: "Dois Terços Superior (2/3)", action: #selector(snapTopTwoThirds), keyEquivalent: "")
+        topTwoThirdsItem.target = self
+        verticalMenu.addItem(topTwoThirdsItem)
+
+        let verticalParentItem = NSMenuItem(title: "Layouts Verticais (Portrait)", action: nil, keyEquivalent: "")
+        verticalParentItem.submenu = verticalMenu
+        menu.addItem(verticalParentItem)
+
         menu.addItem(NSMenuItem.separator())
 
         let clearPairItem = NSMenuItem(title: "Desfazer Divisor Emparelhado", action: #selector(clearPairing), keyEquivalent: "")
@@ -100,6 +134,30 @@ public final class MenuBarController {
 
     @objc private func snapCenter() {
         snapEngine.snapFocusedWindow(to: .centerThird)
+    }
+
+    @objc private func snapTopHalf() {
+        snapEngine.snapFocusedWindow(to: .topHalf)
+    }
+
+    @objc private func snapBottomHalf() {
+        snapEngine.snapFocusedWindow(to: .bottomHalf)
+    }
+
+    @objc private func snapTopThird() {
+        snapEngine.snapFocusedWindow(to: .topThird)
+    }
+
+    @objc private func snapMiddleThird() {
+        snapEngine.snapFocusedWindow(to: .middleThird)
+    }
+
+    @objc private func snapBottomThird() {
+        snapEngine.snapFocusedWindow(to: .bottomThird)
+    }
+
+    @objc private func snapTopTwoThirds() {
+        snapEngine.snapFocusedWindow(to: .topTwoThirds)
     }
 
     @objc private func clearPairing() {

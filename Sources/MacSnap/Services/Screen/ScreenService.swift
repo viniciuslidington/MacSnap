@@ -42,3 +42,10 @@ public final class ScreenService: ScreenServiceProtocol, @unchecked Sendable {
         return bestScreen ?? primaryScreen
     }
 }
+
+extension NSScreen {
+    /// Indica se o monitor está posicionado na orientação vertical (altura maior que largura).
+    public var isPortrait: Bool {
+        return frame.height > frame.width
+    }
+}

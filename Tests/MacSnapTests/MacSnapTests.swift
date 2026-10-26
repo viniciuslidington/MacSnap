@@ -76,4 +76,29 @@ struct SnapGeometryTests {
         pair.ratio = 0.99
         #expect(pair.ratio == 0.85) // Não deixa passar de 85%
     }
+
+    @Test func testVerticalMonitorThirdsCalculations() {
+        // Simula um monitor vertical (1080 x 1920, visível 1080 x 1890)
+        let visibleFrame = CGRect(x: 0, y: 0, width: 1080, height: 1890)
+        let expectedThirdHeight: CGFloat = 1890.0 / 3.0 // 630
+
+        let topThird = SnapZone.topThird.targetRect(for: visibleFrame)
+        #expect(topThird.origin.y == 1260)
+        #expect(topThird.height == expectedThirdHeight)
+        #expect(topThird.width == 1080)
+
+        let middleThird = SnapZone.middleThird.targetRect(for: visibleFrame)
+        #expect(middleThird.origin.y == 630)
+        #expect(middleThird.height == expectedThirdHeight)
+        #expect(middleThird.width == 1080)
+
+        let bottomThird = SnapZone.bottomThird.targetRect(for: visibleFrame)
+        #expect(bottomThird.origin.y == 0)
+        #expect(bottomThird.height == expectedThirdHeight)
+        #expect(bottomThird.width == 1080)
+
+        let topTwoThirds = SnapZone.topTwoThirds.targetRect(for: visibleFrame)
+        #expect(topTwoThirds.origin.y == 630)
+        #expect(topTwoThirds.height == 1260)
+    }
 }

@@ -2,17 +2,29 @@ import Foundation
 import CoreGraphics
 
 /// Representa as possíveis zonas de ancoragem (snap) na tela,
-/// similar ao funcionamento do Windows Snap (Aero Snap e Snap Layouts).
+/// incluindo suporte avançado para monitores horizontais e verticais.
 public enum SnapZone: Sendable, Equatable {
+    // Layouts Padrão
     case leftHalf
     case rightHalf
     case topHalf
     case bottomHalf
     case maximize
+
+    // Quadrantes
     case topLeftQuarter
     case topRightQuarter
     case bottomLeftQuarter
     case bottomRightQuarter
+
+    // Terços Verticais (Especial para Monitores Verticais / Portrait)
+    case topThird
+    case middleThird
+    case bottomThird
+    case topTwoThirds
+    case bottomTwoThirds
+
+    // Terços Horizontais
     case centerThird
 
     /// Calcula o retângulo de destino (em coordenadas da tela Cocoa) para a zona indicada.
@@ -25,6 +37,8 @@ public enum SnapZone: Sendable, Equatable {
         let height = visibleFrame.height
         let halfWidth = width / 2.0
         let halfHeight = height / 2.0
+        let thirdHeight = height / 3.0
+        let twoThirdsHeight = height * (2.0 / 3.0)
 
         switch self {
         case .leftHalf:
@@ -53,6 +67,22 @@ public enum SnapZone: Sendable, Equatable {
 
         case .bottomRightQuarter:
             return CGRect(x: x + halfWidth, y: y, width: halfWidth, height: halfHeight)
+
+        // Monitores Verticais (Partições horizontais empilhadas)
+        case .topThird:
+            return CGRect(x: x, y: y + (thirdHeight * 2.0), width: width, height: thirdHeight)
+
+        case .middleThird:
+            return CGRect(x: x, y: y + thirdHeight, width: width, height: thirdHeight)
+
+        case .bottomThird:
+            return CGRect(x: x, y: y, width: width, height: thirdHeight)
+
+        case .topTwoThirds:
+            return CGRect(x: x, y: y + thirdHeight, width: width, height: twoThirdsHeight)
+
+        case .bottomTwoThirds:
+            return CGRect(x: x, y: y, width: width, height: twoThirdsHeight)
 
         case .centerThird:
             let thirdWidth = width / 3.0

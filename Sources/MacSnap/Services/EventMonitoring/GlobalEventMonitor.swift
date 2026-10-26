@@ -3,6 +3,7 @@ import CoreGraphics
 
 /// Monitora eventos globais de cursor do mouse usando `CGEventTap` para detectar
 /// quando o usuário arrasta uma janela até as bordas da tela e aciona o Snap.
+/// Possui suporte inteligente para monitores verticais com a Snap Bar de layouts.
 @MainActor
 public final class GlobalEventMonitor: EventMonitoringProtocol {
     public static let shared = GlobalEventMonitor()
@@ -15,6 +16,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
     private let previewOverlay: PreviewOverlayWindow
+    private let snapLayoutBar: SnapLayoutBarWindow
     private let snapEngine: WindowSnappingProtocol
 
     public init(
@@ -26,6 +28,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         self.accessibilityService = accessibilityService
         self.snapEngine = snapEngine
         self.previewOverlay = PreviewOverlayWindow()
+        self.snapLayoutBar = SnapLayoutBarWindow()
     }
 
     public func startMonitoring() {
@@ -94,6 +97,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         let visibleFrame = screen.visibleFrame
         let edgeThreshold: CGFloat = 20.0
         let cornerThreshold: CGFloat = 80.0
+        let isPortrait = screen.isPortrait
 
         let isLeft = point.x <= visibleFrame.minX + edgeThreshold
         let isRight = point.x >= visibleFrame.maxX - edgeThreshold
@@ -105,24 +109,64 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
         var detectedZone: SnapZone?
 
-        // 1. Detecção de cantos (quadrantes)
-        if isLeft && isNearTop {
-            detectedZone = .topLeftQuarter
-        } else if isRight && isNearTop {
-            detectedZone = .topRightQuarter
-        } else if isLeft && isNearBottom {
-            detectedZone = .bottomLeftQuarter
-        } else if isRight && isNearBottom {
-            detectedZone = .bottomRightQuarter
-        // 2. Detecção de metades e maximização
-        } else if isTop {
-            detectedZone = .maximize
-        } else if isLeft {
-            detectedZone = .leftHalf
-        } else if isRight {
-            detectedZone = .rightHalf
-        } else if isBottom {
-            detectedZone = .bottomHalf
+        // 1. MONITOR VERTICAL: Tratamento especial no topo
+        if isPortrait {
+            let topZoneThreshold: CGFloat = 130.0
+            let isApproachingTop = point.y >= visibleFrame.maxY - topZoneThreshold
+
+            if isApproachingTop {
+                // Abre a barra flutuante com layouts otimizados para monitores verticais
+                snapLayoutBar.present(on: screen)
+
+                // Verifica se o usuário está pairando sobre um dos cards da barra
+                if let hoveredBarZone = snapLayoutBar.checkHover(at: point) {
+                    detectedZone = hoveredBarZone
+                } else if isTop {
+                    // Se encostou na borda superior fora dos botões:
+                    // Esquerda do topo = Metade Superior, Direita do topo = 2/3 Superior
+                    if point.x < visibleFrame.midX {
+                        detectedZone = .topHalf
+                    } else {
+                        detectedZone = .topTwoThirds
+                    }
+                }
+            } else {
+                snapLayoutBar.dismiss()
+            }
+
+            // Ações laterais em monitor vertical
+            if detectedZone == nil {
+                if isLeft {
+                    detectedZone = isNearTop ? .topHalf : (isNearBottom ? .bottomHalf : .leftHalf)
+                } else if isRight {
+                    detectedZone = isNearTop ? .topTwoThirds : (isNearBottom ? .bottomThird : .rightHalf)
+                } else if isBottom {
+                    detectedZone = .bottomHalf
+                }
+            }
+        } else {
+            // 2. MONITOR HORIZONTAL (Padrão)
+            snapLayoutBar.dismiss()
+
+            // Detecção de cantos (quadrantes)
+            if isLeft && isNearTop {
+                detectedZone = .topLeftQuarter
+            } else if isRight && isNearTop {
+                detectedZone = .topRightQuarter
+            } else if isLeft && isNearBottom {
+                detectedZone = .bottomLeftQuarter
+            } else if isRight && isNearBottom {
+                detectedZone = .bottomRightQuarter
+            // Metades e maximização
+            } else if isTop {
+                detectedZone = .maximize
+            } else if isLeft {
+                detectedZone = .leftHalf
+            } else if isRight {
+                detectedZone = .rightHalf
+            } else if isBottom {
+                detectedZone = .bottomHalf
+            }
         }
 
         if let zone = detectedZone {
@@ -141,6 +185,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
     private func handleRelease() {
         self.previewOverlay.dismiss()
+        self.snapLayoutBar.dismiss()
 
         if let zone = self.activeZone {
             self.snapEngine.snapFocusedWindow(to: zone)
