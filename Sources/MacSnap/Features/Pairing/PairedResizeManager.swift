@@ -1,7 +1,7 @@
 import Cocoa
 
 /// Gerencia janelas emparelhadas lado a lado (horizontal) ou empilhadas (vertical) e o divisor interativo central.
-/// Possui auto-descoberta dinâmica de janelas vizinhas na intercessão da tela.
+/// Possui auto-descoberta dinâmica de janelas vizinhas na intercessão da tela e cálculo de encaixe sem sobreposição.
 @MainActor
 public final class PairedResizeManager {
     public static let shared = PairedResizeManager()
@@ -40,7 +40,7 @@ public final class PairedResizeManager {
     }
 
     /// Busca ativamente se já existe uma janela aberta no lado oposto para conectar o par imediatamente.
-    private func findAdjacentWindow(atCocoaPoint point: CGPoint, excludingPid: pid_t) -> WindowElement? {
+    public func findAdjacentWindow(atCocoaPoint point: CGPoint, excludingPid: pid_t) -> WindowElement? {
         let primaryHeight = screenService.primaryScreenHeight
         let axPoint = ScreenGeometry.cocoaPointToAX(cocoaPoint: point, primaryScreenHeight: primaryHeight)
         let myPid = ProcessInfo.processInfo.processIdentifier
@@ -52,129 +52,139 @@ public final class PairedResizeManager {
         return nil
     }
 
-    /// Registra uma nova janela que sofreu snap e ativa o divisor caso haja uma parceira oposta.
-    public func registerSnap(window: WindowElement, zone: SnapZone, screen: NSScreen) {
+    /// Calcula a área exata restante se já houver uma janela parceira posicionada no lado oposto,
+    /// evitando sobreposição mesmo quando a janela parceira tiver tamanho customizado ou altura mínima (ex: Xcode).
+    public func calculateFlushTargetRect(
+        for zone: SnapZone,
+        screen: NSScreen,
+        windowToExclude: WindowElement?
+    ) -> (targetRect: CGRect, partner: WindowElement, orientation: SplitOrientation, ratio: CGFloat)? {
         let visibleFrame = screen.visibleFrame
         let w = visibleFrame.width
         let h = visibleFrame.height
         let x = visibleFrame.origin.x
         let y = visibleFrame.origin.y
+        let primaryHeight = screenService.primaryScreenHeight
+        let excludePid = windowToExclude?.pid ?? 0
 
         switch zone {
-        // 1. Emparelhamento Horizontal Simétrico (50/50)
-        case .leftHalf:
+        // Encaixe na parte inferior: busca parceiro no topo
+        case .bottomHalf, .bottomThird, .bottomTwoThirds:
+            let samplePoint = CGPoint(x: x + (w * 0.5), y: y + (h * 0.75))
+            if let topPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
+               let topFrame = topPartner.cocoaFrame(primaryScreenHeight: primaryHeight) {
+                // topFrame.minY é a borda inferior real da janela superior
+                let availableHeight = topFrame.minY - y
+                if availableHeight >= 80 {
+                    let flushRect = CGRect(x: x, y: y, width: w, height: availableHeight)
+                    let ratio = min(max(topFrame.height / h, 0.15), 0.85)
+                    return (flushRect, topPartner, .vertical, ratio)
+                }
+            }
+
+        // Encaixe na parte superior: busca parceiro na base
+        case .topHalf, .topThird, .topTwoThirds:
+            let samplePoint = CGPoint(x: x + (w * 0.5), y: y + (h * 0.25))
+            if let bottomPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
+               let bottomFrame = bottomPartner.cocoaFrame(primaryScreenHeight: primaryHeight) {
+                let bottomTopEdge = bottomFrame.maxY
+                let availableHeight = (y + h) - bottomTopEdge
+                if availableHeight >= 80 {
+                    let flushRect = CGRect(x: x, y: bottomTopEdge, width: w, height: availableHeight)
+                    let ratio = min(max(availableHeight / h, 0.15), 0.85)
+                    return (flushRect, bottomPartner, .vertical, ratio)
+                }
+            }
+
+        // Encaixe na direita: busca parceiro na esquerda
+        case .rightHalf, .rightOneThird, .rightTwoThirds:
+            let samplePoint = CGPoint(x: x + (w * 0.25), y: y + (h * 0.5))
+            if let leftPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
+               let leftFrame = leftPartner.cocoaFrame(primaryScreenHeight: primaryHeight) {
+                let leftRightEdge = leftFrame.maxX
+                let availableWidth = (x + w) - leftRightEdge
+                if availableWidth >= 100 {
+                    let flushRect = CGRect(x: leftRightEdge, y: y, width: availableWidth, height: h)
+                    let ratio = min(max(leftFrame.width / w, 0.15), 0.85)
+                    return (flushRect, leftPartner, .horizontal, ratio)
+                }
+            }
+
+        // Encaixe na esquerda: busca parceiro na direita
+        case .leftHalf, .leftOneThird, .leftThird, .leftTwoThirds:
+            let samplePoint = CGPoint(x: x + (w * 0.75), y: y + (h * 0.5))
+            if let rightPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
+               let rightFrame = rightPartner.cocoaFrame(primaryScreenHeight: primaryHeight) {
+                let rightLeftEdge = rightFrame.minX
+                let availableWidth = rightLeftEdge - x
+                if availableWidth >= 100 {
+                    let flushRect = CGRect(x: x, y: y, width: availableWidth, height: h)
+                    let ratio = min(max(availableWidth / w, 0.15), 0.85)
+                    return (flushRect, rightPartner, .horizontal, ratio)
+                }
+            }
+
+        default:
+            break
+        }
+
+        return nil
+    }
+
+    /// Registra uma nova janela que sofreu snap e ativa o divisor caso haja uma parceira oposta.
+    public func registerSnap(window: WindowElement, zone: SnapZone, screen: NSScreen) {
+        let visibleFrame = screen.visibleFrame
+
+        // 1. Tenta emparelhar dinamicamente usando a parceira detectada na intercessão
+        if let flush = calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: window) {
+            if flush.orientation == .vertical {
+                if zone == .topHalf || zone == .topThird || zone == .topTwoThirds {
+                    recentTopWindow = window
+                    recentBottomWindow = flush.partner
+                    createVerticalPair(top: window, bottom: flush.partner, ratio: flush.ratio, visibleFrame: visibleFrame)
+                } else {
+                    recentTopWindow = flush.partner
+                    recentBottomWindow = window
+                    createVerticalPair(top: flush.partner, bottom: window, ratio: flush.ratio, visibleFrame: visibleFrame)
+                }
+            } else {
+                if zone == .leftHalf || zone == .leftOneThird || zone == .leftThird || zone == .leftTwoThirds {
+                    recentLeftWindow = window
+                    recentRightWindow = flush.partner
+                    createHorizontalPair(left: window, right: flush.partner, ratio: flush.ratio, visibleFrame: visibleFrame)
+                } else {
+                    recentLeftWindow = flush.partner
+                    recentRightWindow = window
+                    createHorizontalPair(left: flush.partner, right: window, ratio: flush.ratio, visibleFrame: visibleFrame)
+                }
+            }
+            return
+        }
+
+        // 2. Fallback de histórico recente caso não tenha detectado na tela
+        switch zone {
+        case .leftHalf, .leftOneThird, .leftThird, .leftTwoThirds:
             recentLeftWindow = window
-            let right = recentRightWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.75), y: y + (h * 0.5)),
-                excludingPid: window.pid
-            )
-            if let partner = right {
-                recentRightWindow = partner
-                createHorizontalPair(left: window, right: partner, ratio: 0.5, visibleFrame: visibleFrame)
+            if let right = recentRightWindow {
+                createHorizontalPair(left: window, right: right, ratio: 0.5, visibleFrame: visibleFrame)
             }
 
-        case .rightHalf:
+        case .rightHalf, .rightOneThird, .rightTwoThirds:
             recentRightWindow = window
-            let left = recentLeftWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.25), y: y + (h * 0.5)),
-                excludingPid: window.pid
-            )
-            if let partner = left {
-                recentLeftWindow = partner
-                createHorizontalPair(left: partner, right: window, ratio: 0.5, visibleFrame: visibleFrame)
+            if let left = recentLeftWindow {
+                createHorizontalPair(left: left, right: window, ratio: 0.5, visibleFrame: visibleFrame)
             }
 
-        // 2. Emparelhamento Horizontal Assimétrico (2/3 e 1/3)
-        case .leftTwoThirds:
-            recentLeftWindow = window
-            let right = recentRightWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.85), y: y + (h * 0.5)),
-                excludingPid: window.pid
-            )
-            if let partner = right {
-                recentRightWindow = partner
-                createHorizontalPair(left: window, right: partner, ratio: 2.0 / 3.0, visibleFrame: visibleFrame)
-            }
-
-        case .rightOneThird:
-            recentRightWindow = window
-            let left = recentLeftWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.35), y: y + (h * 0.5)),
-                excludingPid: window.pid
-            )
-            if let partner = left {
-                recentLeftWindow = partner
-                createHorizontalPair(left: partner, right: window, ratio: 2.0 / 3.0, visibleFrame: visibleFrame)
-            }
-
-        // 3. Emparelhamento Horizontal Assimétrico Invertido (1/3 e 2/3)
-        case .leftOneThird, .leftThird:
-            recentLeftWindow = window
-            let right = recentRightWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.65), y: y + (h * 0.5)),
-                excludingPid: window.pid
-            )
-            if let partner = right {
-                recentRightWindow = partner
-                createHorizontalPair(left: window, right: partner, ratio: 1.0 / 3.0, visibleFrame: visibleFrame)
-            }
-
-        case .rightTwoThirds:
-            recentRightWindow = window
-            let left = recentLeftWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.15), y: y + (h * 0.5)),
-                excludingPid: window.pid
-            )
-            if let partner = left {
-                recentLeftWindow = partner
-                createHorizontalPair(left: partner, right: window, ratio: 1.0 / 3.0, visibleFrame: visibleFrame)
-            }
-
-        // 4. Emparelhamento Vertical Simétrico (Topo e Base 50/50)
-        case .topHalf:
+        case .topHalf, .topThird, .topTwoThirds:
             recentTopWindow = window
-            let bottom = recentBottomWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.5), y: y + (h * 0.25)),
-                excludingPid: window.pid
-            )
-            if let partner = bottom {
-                recentBottomWindow = partner
-                createVerticalPair(top: window, bottom: partner, ratio: 0.5, visibleFrame: visibleFrame)
+            if let bottom = recentBottomWindow {
+                createVerticalPair(top: window, bottom: bottom, ratio: 0.5, visibleFrame: visibleFrame)
             }
 
-        case .bottomHalf:
+        case .bottomHalf, .bottomThird, .bottomTwoThirds:
             recentBottomWindow = window
-            let top = recentTopWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.5), y: y + (h * 0.75)),
-                excludingPid: window.pid
-            )
-            if let partner = top {
-                recentTopWindow = partner
-                createVerticalPair(top: partner, bottom: window, ratio: 0.5, visibleFrame: visibleFrame)
-            }
-
-        // 5. Emparelhamento Vertical Assimétrico (2/3 e 1/3)
-        case .topTwoThirds:
-            recentTopWindow = window
-            let bottom = recentBottomWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.5), y: y + (h * 0.15)),
-                excludingPid: window.pid
-            )
-            if let partner = bottom {
-                recentBottomWindow = partner
-                createVerticalPair(top: window, bottom: partner, ratio: 2.0 / 3.0, visibleFrame: visibleFrame)
-            }
-
-        // 6. Emparelhamento Vertical Assimétrico Invertido (1/3 e 2/3)
-        case .bottomTwoThirds:
-            recentBottomWindow = window
-            let top = recentTopWindow ?? findAdjacentWindow(
-                atCocoaPoint: CGPoint(x: x + (w * 0.5), y: y + (h * 0.85)),
-                excludingPid: window.pid
-            )
-            if let partner = top {
-                recentTopWindow = partner
-                createVerticalPair(top: partner, bottom: window, ratio: 1.0 / 3.0, visibleFrame: visibleFrame)
+            if let top = recentTopWindow {
+                createVerticalPair(top: top, bottom: window, ratio: 0.5, visibleFrame: visibleFrame)
             }
 
         case .maximize:

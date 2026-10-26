@@ -41,8 +41,16 @@ public final class SnapEngine: WindowSnappingProtocol {
 
     public func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen) {
         let visibleFrame = screen.visibleFrame
-        let targetRect = zone.targetRect(for: visibleFrame)
         let primaryHeight = screenService.primaryScreenHeight
+
+        // Encaixe inteligente sem sobreposição: se já houver uma janela parceira na tela (ex: Xcode no topo),
+        // calcula o retângulo exato restante para encaixar como peça de quebra-cabeça
+        let targetRect: CGRect
+        if let flush = pairingManager.calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: window) {
+            targetRect = flush.targetRect
+        } else {
+            targetRect = zone.targetRect(for: visibleFrame)
+        }
 
         let success = window.setCocoaFrame(targetRect, primaryScreenHeight: primaryHeight)
         if success {

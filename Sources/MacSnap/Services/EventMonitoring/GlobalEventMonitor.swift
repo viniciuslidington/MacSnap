@@ -202,7 +202,16 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         if let zone = detectedZone {
             self.activeZone = zone
             self.activeScreen = screen
-            let targetRect = zone.targetRect(for: visibleFrame)
+
+            // Preview dinâmico inteligente: se houver parceiro (como Xcode), a caixa azul
+            // para exatamente na borda dele, evitando a sobreposição visual feia na tela
+            let targetRect: CGRect
+            if let flush = PairedResizeManager.shared.calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: currentDraggedWindow) {
+                targetRect = flush.targetRect
+            } else {
+                targetRect = zone.targetRect(for: visibleFrame)
+            }
+
             self.previewOverlay.present(at: targetRect, animated: true)
         } else {
             if self.activeZone != nil {
