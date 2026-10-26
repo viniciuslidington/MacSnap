@@ -1,17 +1,17 @@
 import Cocoa
 import QuartzCore
 
-/// Estados visuais da barra flutuante de layouts (estilo Windows 11 Snap Flyout).
+/// Visual presentation states of the floating layout bar (Windows 11 Snap Flyout style).
 public enum BarPresentationState: Equatable, Sendable {
     case hidden
     case pill
     case expanded
 }
 
-/// Barra flutuante de layouts (estilo Snap Bar do Windows 11) que se desdobra
-/// no topo da tela quando o usuário arrasta uma janela:
-/// 1. Surge primeiro como uma pílula achatada e discreta (Pill Mode).
-/// 2. Ao passar o cursor por cima, expande fluidamente revelando os cartões de layout.
+/// Floating layout bar (Windows 11 Snap Bar style) that unfurls
+/// at the top of the screen when the user drags a window:
+/// 1. Appears first as a compact, subtle pill (Pill Mode).
+/// 2. Expands smoothly upon mouse hover, revealing layout cards.
 @MainActor
 public final class SnapLayoutBarWindow: NSPanel {
     private let barView = SnapLayoutBarView()
@@ -28,7 +28,7 @@ public final class SnapLayoutBarWindow: NSPanel {
 
         self.isOpaque = false
         self.backgroundColor = .clear
-        // Nível superior ao PreviewOverlayWindow para garantir que a barra de layouts nunca fique encoberta
+        // Higher level than PreviewOverlayWindow to ensure the layout bar is never obscured
         self.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 25)
         self.hasShadow = true
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
@@ -36,7 +36,7 @@ public final class SnapLayoutBarWindow: NSPanel {
         self.contentView = barView
     }
 
-    /// Exibe a pílula achatada e discreta (Pill Mode) no topo da tela.
+    /// Displays the compact, subtle pill (Pill Mode) at the top of the screen.
     public func presentPill(on screen: NSScreen, animated: Bool = true) {
         if presentationState == .pill && currentScreen == screen { return }
 
@@ -54,7 +54,7 @@ public final class SnapLayoutBarWindow: NSPanel {
         let targetFrame = CGRect(x: x, y: targetY, width: pillW, height: pillH)
 
         if self.isVisible && screenChanged {
-            // Transição suave entre monitores: reposiciona no topo do novo monitor onde o mouse está
+            // Smooth transition between monitors: repositions at top of new monitor under cursor
             if animated {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = 0.16
@@ -89,7 +89,7 @@ public final class SnapLayoutBarWindow: NSPanel {
         self.invalidateShadow()
     }
 
-    /// Expande suavemente da pílula para a barra completa ao detectar hover.
+    /// Smoothly expands from the pill into the full layout bar upon detecting hover.
     public func expand(animated: Bool = true) {
         guard presentationState == .pill, let screen = currentScreen else { return }
         presentationState = .expanded
@@ -117,7 +117,7 @@ public final class SnapLayoutBarWindow: NSPanel {
         self.invalidateShadow()
     }
 
-    /// Recolhe suavemente a barra de layouts de volta para o modo pílula achatada.
+    /// Smoothly collapses the layout bar back into compact pill mode.
     public func collapseToPill(animated: Bool = true) {
         guard presentationState == .expanded, let screen = currentScreen else { return }
         presentationState = .pill
@@ -143,7 +143,7 @@ public final class SnapLayoutBarWindow: NSPanel {
         self.invalidateShadow()
     }
 
-    /// Exibe diretamente em modo expandido (mantido para compatibilidade e testes).
+    /// Directly displays in expanded mode (maintained for backwards compatibility and tests).
     public func present(on screen: NSScreen, animated: Bool = true) {
         if presentationState == .expanded && currentScreen == screen { return }
         currentScreen = screen
@@ -193,7 +193,7 @@ public final class SnapLayoutBarWindow: NSPanel {
         self.invalidateShadow()
     }
 
-    /// Esconde a barra ou pílula com animação suave.
+    /// Dismisses the bar or pill with smooth animation.
     public func dismiss(animated: Bool = true) {
         guard presentationState != .hidden else { return }
         presentationState = .hidden
@@ -218,29 +218,29 @@ public final class SnapLayoutBarWindow: NSPanel {
         }
     }
 
-    /// Orientação dos cartões de layout.
+    /// Orientation of layout cards.
     public var isPortrait: Bool {
         get { barView.isPortrait }
         set { barView.isPortrait = newValue }
     }
 
-    /// Retorna o ID do slot atualmente sob o cursor.
+    /// Returns the ID of the slot currently under the cursor.
     public var currentlyHoveredSlotID: Int? {
         barView.currentlyHoveredSlotID
     }
 
-    /// Retorna o número total de slots configurados no modal.
+    /// Returns the total number of configured slots in the modal.
     public var totalSlotsCount: Int {
         barView.totalSlotsCount
     }
 
-    /// Retorna o rect de um slot específico pelo índice (em coordenadas locais da view).
+    /// Returns the rect of a specific slot by index (in local view coordinates).
     public func slotRect(at index: Int) -> CGRect? {
         barView.slotRect(at: index)
     }
 
-    /// Atualiza qual slot está sob o cursor e retorna a `SnapZone` correspondente, se houver.
-    /// Se estiver no modo pílula e o cursor estiver sobre a pílula, expande automaticamente.
+    /// Updates which slot is under the cursor and returns the corresponding `SnapZone`, if any.
+    /// If currently in pill mode and cursor hovers over the pill, automatically expands.
     public func checkHover(at globalPoint: CGPoint) -> SnapZone? {
         guard presentationState != .hidden else { return nil }
 
@@ -259,7 +259,7 @@ public final class SnapLayoutBarWindow: NSPanel {
     }
 }
 
-/// View com o desenho visual translúcido dos cards de layout no estilo Apple Glass UI.
+/// View providing translucent layout card drawing in Apple Glass UI style.
 final class SnapLayoutBarView: NSView {
     struct LayoutCard {
         let id: Int
@@ -388,7 +388,7 @@ final class SnapLayoutBarView: NSView {
         let b = bounds
         guard b.width > 0 && b.height > 0 else { return }
 
-        // Se estiver em modo pílula, não monta cartões
+        // If in pill mode, do not build cards
         guard presentationState == .expanded else { return }
 
         let cardHeight: CGFloat = 74.0
@@ -400,7 +400,7 @@ final class SnapLayoutBarView: NSView {
         }
     }
 
-    // MARK: - Cartões para Telas Horizontais (16:9 / Ultrawide)
+    // MARK: - Cards for Landscape Screens (16:9 / Ultrawide)
     private func buildHorizontalSlots(cardHeight: CGFloat, marginH: CGFloat, gutter: CGFloat) {
         let cardCount: CGFloat = 6.0
         let availableW = bounds.width - (marginH * 2) - (gutter * (cardCount - 1))
@@ -419,14 +419,14 @@ final class SnapLayoutBarView: NSView {
             slots.append(LayoutSlot(id: slots.count, cardId: cardId, rect: rect, zone: zone))
         }
 
-        // 1. Duas Colunas (50 / 50)
+        // 1. Two Columns (50 / 50)
         let c0Rect = addCard(index: 0)
         let c0Inner = c0Rect.insetBy(dx: 4, dy: 4)
         let c0ColW = (c0Inner.width - 2.0) / 2.0
         addSlot(cardId: 0, rect: CGRect(x: c0Inner.minX, y: c0Inner.minY, width: c0ColW, height: c0Inner.height), zone: .leftHalf)
         addSlot(cardId: 0, rect: CGRect(x: c0Inner.minX + c0ColW + 2.0, y: c0Inner.minY, width: c0ColW, height: c0Inner.height), zone: .rightHalf)
 
-        // 2. Três Colunas (1/3 / 1/3 / 1/3)
+        // 2. Three Columns (1/3 / 1/3 / 1/3)
         let c1Rect = addCard(index: 1)
         let c1Inner = c1Rect.insetBy(dx: 4, dy: 4)
         let c1ColW = (c1Inner.width - 4.0) / 3.0
@@ -434,7 +434,7 @@ final class SnapLayoutBarView: NSView {
         addSlot(cardId: 1, rect: CGRect(x: c1Inner.minX + c1ColW + 2.0, y: c1Inner.minY, width: c1ColW, height: c1Inner.height), zone: .centerThird)
         addSlot(cardId: 1, rect: CGRect(x: c1Inner.minX + (c1ColW * 2) + 4.0, y: c1Inner.minY, width: c1ColW, height: c1Inner.height), zone: .rightThird)
 
-        // 3. Assimétrico (2/3 + 1/3)
+        // 3. Asymmetric (2/3 + 1/3)
         let c2Rect = addCard(index: 2)
         let c2Inner = c2Rect.insetBy(dx: 4, dy: 4)
         let c2TwoThirdsW = (c2Inner.width - 2.0) * (2.0 / 3.0)
@@ -442,7 +442,7 @@ final class SnapLayoutBarView: NSView {
         addSlot(cardId: 2, rect: CGRect(x: c2Inner.minX, y: c2Inner.minY, width: c2TwoThirdsW, height: c2Inner.height), zone: .leftTwoThirds)
         addSlot(cardId: 2, rect: CGRect(x: c2Inner.minX + c2TwoThirdsW + 2.0, y: c2Inner.minY, width: c2OneThirdW, height: c2Inner.height), zone: .rightOneThird)
 
-        // 4. Assimétrico Invertido (1/3 + 2/3)
+        // 4. Inverted Asymmetric (1/3 + 2/3)
         let c3Rect = addCard(index: 3)
         let c3Inner = c3Rect.insetBy(dx: 4, dy: 4)
         let c3OneThirdW = (c3Inner.width - 2.0) * (1.0 / 3.0)
@@ -450,7 +450,7 @@ final class SnapLayoutBarView: NSView {
         addSlot(cardId: 3, rect: CGRect(x: c3Inner.minX, y: c3Inner.minY, width: c3OneThirdW, height: c3Inner.height), zone: .leftOneThird)
         addSlot(cardId: 3, rect: CGRect(x: c3Inner.minX + c3OneThirdW + 2.0, y: c3Inner.minY, width: c3TwoThirdsW, height: c3Inner.height), zone: .rightTwoThirds)
 
-        // 5. Quatro Quadrantes (2x2)
+        // 5. Four Quarters (2x2)
         let c4Rect = addCard(index: 4)
         let c4Inner = c4Rect.insetBy(dx: 4, dy: 4)
         let qW = (c4Inner.width - 2.0) / 2.0
@@ -460,13 +460,13 @@ final class SnapLayoutBarView: NSView {
         addSlot(cardId: 4, rect: CGRect(x: c4Inner.minX, y: c4Inner.minY, width: qW, height: qH), zone: .bottomLeftQuarter)
         addSlot(cardId: 4, rect: CGRect(x: c4Inner.minX + qW + 2.0, y: c4Inner.minY, width: qW, height: qH), zone: .bottomRightQuarter)
 
-        // 6. Maximizar
+        // 6. Maximize
         let c5Rect = addCard(index: 5)
         let c5Inner = c5Rect.insetBy(dx: 4, dy: 4)
         addSlot(cardId: 5, rect: c5Inner, zone: .maximize)
     }
 
-    // MARK: - Cartões para Telas Verticais (Portrait)
+    // MARK: - Cards for Portrait Screens
     private func buildVerticalSlots(cardHeight: CGFloat, marginH: CGFloat, gutter: CGFloat) {
         let cardCount: CGFloat = 5.0
         let availableW = bounds.width - (marginH * 2) - (gutter * (cardCount - 1))
@@ -485,22 +485,22 @@ final class SnapLayoutBarView: NSView {
             slots.append(LayoutSlot(id: slots.count, cardId: cardId, rect: rect, zone: zone))
         }
 
-        // 1. Metades Verticais (Topo / Base)
+        // 1. Vertical Halves (Top / Bottom)
         let c0Rect = addCard(index: 0)
         let c0Inner = c0Rect.insetBy(dx: 4, dy: 4)
         let halfH = (c0Inner.height - 2.0) / 2.0
         addSlot(cardId: 0, rect: CGRect(x: c0Inner.minX, y: c0Inner.minY + halfH + 2.0, width: c0Inner.width, height: halfH), zone: .topHalf)
         addSlot(cardId: 0, rect: CGRect(x: c0Inner.minX, y: c0Inner.minY, width: c0Inner.width, height: halfH), zone: .bottomHalf)
 
-        // 2. Terços Verticais (Topo / Centro / Base)
+        // 2. Vertical Thirds (Top / Center / Bottom)
         let c1Rect = addCard(index: 1)
         let c1Inner = c1Rect.insetBy(dx: 4, dy: 4)
         let thirdH = (c1Inner.height - 4.0) / 3.0
         addSlot(cardId: 1, rect: CGRect(x: c1Inner.minX, y: c1Inner.minY + (thirdH * 2) + 4.0, width: c1Inner.width, height: thirdH), zone: .topThird)
-        addSlot(cardId: 1, rect: CGRect(x: c1Inner.minX, y: c1Inner.minY + thirdH + 2.0, width: c1Inner.width, height: thirdH), zone: .middleThird)
+        addSlot(cardId: 1, rect: CGRect(x: c1Inner.minX + c1Inner.width * 0 + 0, y: c1Inner.minY + thirdH + 2.0, width: c1Inner.width, height: thirdH), zone: .middleThird)
         addSlot(cardId: 1, rect: CGRect(x: c1Inner.minX, y: c1Inner.minY, width: c1Inner.width, height: thirdH), zone: .bottomThird)
 
-        // 3. Dois Terços (2/3 Topo + 1/3 Base)
+        // 3. Two Thirds (2/3 Top + 1/3 Bottom)
         let c2Rect = addCard(index: 2)
         let c2Inner = c2Rect.insetBy(dx: 4, dy: 4)
         let twoThirdsH = (c2Inner.height - 2.0) * (2.0 / 3.0)
@@ -508,13 +508,13 @@ final class SnapLayoutBarView: NSView {
         addSlot(cardId: 2, rect: CGRect(x: c2Inner.minX, y: c2Inner.minY + oneThirdH + 2.0, width: c2Inner.width, height: twoThirdsH), zone: .topTwoThirds)
         addSlot(cardId: 2, rect: CGRect(x: c2Inner.minX, y: c2Inner.minY, width: c2Inner.width, height: oneThirdH), zone: .bottomThird)
 
-        // 4. Invertido (1/3 Topo + 2/3 Base)
+        // 4. Inverted (1/3 Top + 2/3 Bottom)
         let c3Rect = addCard(index: 3)
         let c3Inner = c3Rect.insetBy(dx: 4, dy: 4)
         addSlot(cardId: 3, rect: CGRect(x: c3Inner.minX, y: c3Inner.minY + twoThirdsH + 2.0, width: c3Inner.width, height: oneThirdH), zone: .topThird)
         addSlot(cardId: 3, rect: CGRect(x: c3Inner.minX, y: c3Inner.minY, width: c3Inner.width, height: twoThirdsH), zone: .bottomTwoThirds)
 
-        // 5. Maximizar
+        // 5. Maximize
         let c4Rect = addCard(index: 4)
         let c4Inner = c4Rect.insetBy(dx: 4, dy: 4)
         addSlot(cardId: 4, rect: c4Inner, zone: .maximize)
@@ -524,17 +524,17 @@ final class SnapLayoutBarView: NSView {
         let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
 
         if presentationState == .pill {
-            // MODO PÍLULA ACHATADA: Design premium Apple Glass no topo da tela com alta transparência
+            // COMPACT PILL MODE: Premium Apple Glass design at top of screen with high translucency
             let bgPath = NSBezierPath(roundedRect: bounds, xRadius: 12, yRadius: 12)
 
-            // Fundo translúcido com profundidade (Apple Glass refinado)
+            // Translucent background with depth (refined Apple Glass)
             let containerTint = isDark
                 ? NSColor(white: 0.12, alpha: 0.35)
                 : NSColor(white: 1.0, alpha: 0.45)
             containerTint.setFill()
             bgPath.fill()
 
-            // Borda externa fina de alta definição
+            // High-definition thin outer border
             let containerRim = isDark
                 ? NSColor(white: 1.0, alpha: 0.22)
                 : NSColor(white: 0.0, alpha: 0.12)
@@ -542,7 +542,7 @@ final class SnapLayoutBarView: NSView {
             bgPath.lineWidth = 1.0
             bgPath.stroke()
 
-            // Linha especular superior simulando reflexo de luz no topo do vidro chanfrado
+            // Top specular highlight line simulating light reflection on beveled glass
             let topHighlightPath = NSBezierPath()
             let highlightY = bounds.maxY - 1.5
             topHighlightPath.move(to: CGPoint(x: bounds.minX + 16, y: highlightY))
@@ -554,9 +554,9 @@ final class SnapLayoutBarView: NSView {
             topHighlightPath.lineWidth = 1.0
             topHighlightPath.stroke()
 
-            // GLIFO VETORIAL DE SNAP LAYOUTS NO CENTRO DA PÍLULA:
-            // Desenha um emblema geométrico composto por mini painéis de divisão de tela
-            // e um sutil chevron para baixo indicando que a barra expande ao aproximar o cursor
+            // VECTOR SNAP LAYOUTS GLYPH AT PILL CENTER:
+            // Draws a geometric emblem consisting of mini screen division panes
+            // and a subtle downward chevron indicating the bar expands on cursor hover
             let iconW: CGFloat = 24.0
             let iconH: CGFloat = 12.0
             let gap: CGFloat = 7.0
@@ -565,7 +565,7 @@ final class SnapLayoutBarView: NSView {
             let startX = bounds.midX - (totalContentW / 2.0)
             let iconY = bounds.midY - (iconH / 2.0)
 
-            // Miniatura de Layout de Janela (Dois painéis lado a lado)
+            // Window layout thumbnail (two side-by-side panes)
             let paneW: CGFloat = (iconW - 2.5) / 2.0
             let leftPaneRect = CGRect(x: startX, y: iconY, width: paneW, height: iconH)
             let rightPaneRect = CGRect(x: startX + paneW + 2.5, y: iconY, width: paneW, height: iconH)
@@ -591,7 +591,7 @@ final class SnapLayoutBarView: NSView {
             rightPath.lineWidth = 1.0
             rightPath.stroke()
 
-            // Sutil Chevron Indicador de Expansão (⌵)
+            // Subtle Expansion Indicator Chevron (⌵)
             let chevronStartX = startX + iconW + gap
             let chevronMidY = bounds.midY
             let chevronPath = NSBezierPath()
@@ -610,10 +610,10 @@ final class SnapLayoutBarView: NSView {
             return
         }
 
-        // MODO EXPANDIDO: Menu completo com cartões espaçados e alta translucidez
+        // EXPANDED MODE: Complete menu with spaced cards and high translucency
         if slots.isEmpty { rebuildSlots() }
 
-        // 1. Container geral Apple Glass translúcido
+        // 1. Apple Glass translucent outer container
         let bgPath = NSBezierPath(roundedRect: bounds, xRadius: 16, yRadius: 16)
         let containerTint = isDark
             ? NSColor(white: 0.12, alpha: 0.25)
@@ -628,7 +628,7 @@ final class SnapLayoutBarView: NSView {
         bgPath.lineWidth = 1.0
         bgPath.stroke()
 
-        // 2. Desenho de cada CARTÃO (Miniatura de tela delimitada com fundo e borda sutil)
+        // 2. Draw each CARD (bounded screen thumbnail with subtle background and rim)
         for card in cards {
             let cardPath = NSBezierPath(roundedRect: card.rect, xRadius: 8, yRadius: 8)
             let cardTint = isDark
@@ -645,20 +645,20 @@ final class SnapLayoutBarView: NSView {
             cardPath.stroke()
         }
 
-        // 3. Desenho de cada SLOT geométrico sem poluição de textos
+        // 3. Draw each geometric SLOT without text clutter
         for slot in slots {
             let isHovered = (slot.id == hoveredSlotID)
             let slotPath = NSBezierPath(roundedRect: slot.rect, xRadius: 5, yRadius: 5)
 
             if isHovered {
-                // Estado Hover: Vidro translúcido cinza claro iluminado (Apple Glass)
+                // Hover state: Illuminated light grey translucent glass (Apple Glass)
                 let hoverFill = isDark
                     ? NSColor(white: 1.0, alpha: 0.32)
                     : NSColor(white: 0.88, alpha: 0.45)
                 hoverFill.setFill()
                 slotPath.fill()
 
-                // Borda especular de alto contraste
+                // High-contrast specular border
                 let hoverStroke = isDark
                     ? NSColor.white
                     : NSColor(white: 0.10, alpha: 0.90)
@@ -666,7 +666,7 @@ final class SnapLayoutBarView: NSView {
                 slotPath.lineWidth = 2.0
                 slotPath.stroke()
 
-                // Brilho especular interno
+                // Inner specular glow
                 let innerSlotRect = slot.rect.insetBy(dx: 1.0, dy: 1.0)
                 if innerSlotRect.width > 0 && innerSlotRect.height > 0 {
                     let innerSlotPath = NSBezierPath(roundedRect: innerSlotRect, xRadius: 4, yRadius: 4)
@@ -678,7 +678,7 @@ final class SnapLayoutBarView: NSView {
                     innerSlotPath.stroke()
                 }
             } else {
-                // Estado Normal: Placa interna neutra suave
+                // Normal state: Soft neutral inner plate
                 let normalFill = isDark
                     ? NSColor(white: 1.0, alpha: 0.05)
                     : NSColor(white: 0.0, alpha: 0.03)
@@ -696,7 +696,7 @@ final class SnapLayoutBarView: NSView {
     }
 }
 
-/// Canvas overlay para desenho dos cartões sobre o NSVisualEffectView sem sofrer oclusão de camadas.
+/// Canvas overlay for drawing cards over NSVisualEffectView without layer occlusion.
 final class SnapBarCanvasView: NSView {
     var onDraw: ((NSRect) -> Void)?
 

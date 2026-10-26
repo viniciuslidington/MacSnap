@@ -1,7 +1,7 @@
 import Cocoa
 import ServiceManagement
 
-/// Controla o ícone e menu do MacSnap na barra de menus superior do macOS (NSStatusItem).
+/// Controls the MacSnap status icon and menu in the macOS top menu bar (NSStatusItem).
 @MainActor
 public final class MenuBarController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
@@ -22,14 +22,14 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     public func menuWillOpen(_ menu: NSMenu) {
-        // Atualiza dinamicamente o status da permissão e do item de login cada vez que o menu abrir
+        // Dynamically refresh accessibility permission status and login item checkmark whenever menu opens
         let isGranted = accessibilityService.isAccessibilityGranted(promptIfNeeded: false)
-        menu.items.first?.title = isGranted ? "✓ Acessibilidade: Habilitada" : "⚠️ Acessibilidade: Requer Permissão"
+        menu.items.first?.title = isGranted ? "✓ Accessibility: Granted" : "⚠️ Accessibility: Permission Required"
 
         for item in menu.items {
             if item.action == #selector(toggleLaunchAtLogin) {
                 let isLaunchAtLogin = isLoginItemEnabled()
-                item.title = isLaunchAtLogin ? "✓ Iniciar com o Mac" : "Iniciar com o Mac"
+                item.title = isLaunchAtLogin ? "✓ Launch at Login" : "Launch at Login"
             }
         }
     }
@@ -45,34 +45,34 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         rebuildMenu()
     }
 
-    /// Gera o ícone vetorizado oficial do MacSnap no padrão visual do macOS (Retina-ready),
-    /// representando duas janelas emparelhadas com barras de título e vão magnético central.
+    /// Generates the official vector MacSnap logo in native macOS Retina proportions,
+    /// representing two paired windows with title bars and a central magnetic gap.
     private func makeMenuBarLogo() -> NSImage {
         let size = NSSize(width: 18, height: 16)
         let image = NSImage(size: size, flipped: false) { _ in
             let strokeColor = NSColor.black
             strokeColor.setStroke()
 
-            // 1. Janela da Esquerda (com bordas arredondadas suaves)
+            // 1. Left Window (with smooth rounded corners)
             let leftRect = NSRect(x: 1.0, y: 1.5, width: 7.0, height: 13.0)
             let leftPath = NSBezierPath(roundedRect: leftRect, xRadius: 2.0, yRadius: 2.0)
             leftPath.lineWidth = 1.3
             leftPath.stroke()
 
-            // Barra de título da janela esquerda
+            // Left window title bar
             let leftHeader = NSBezierPath()
             leftHeader.move(to: NSPoint(x: 1.8, y: 11.2))
             leftHeader.line(to: NSPoint(x: 7.2, y: 11.2))
             leftHeader.lineWidth = 1.0
             leftHeader.stroke()
 
-            // 2. Janela da Direita
+            // 2. Right Window
             let rightRect = NSRect(x: 10.0, y: 1.5, width: 7.0, height: 13.0)
             let rightPath = NSBezierPath(roundedRect: rightRect, xRadius: 2.0, yRadius: 2.0)
             rightPath.lineWidth = 1.3
             rightPath.stroke()
 
-            // Barra de título da janela direita
+            // Right window title bar
             let rightHeader = NSBezierPath()
             rightHeader.move(to: NSPoint(x: 10.8, y: 11.2))
             rightHeader.line(to: NSPoint(x: 16.2, y: 11.2))
@@ -90,114 +90,114 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         let menu = NSMenu()
         menu.delegate = self
 
-        // 1. Indicador de permissões
+        // 1. Permissions indicator
         let isGranted = accessibilityService.isAccessibilityGranted(promptIfNeeded: false)
-        let permTitle = isGranted ? "✓ Acessibilidade: Habilitada" : "⚠️ Acessibilidade: Requer Permissão"
+        let permTitle = isGranted ? "✓ Accessibility: Granted" : "⚠️ Accessibility: Permission Required"
         let permItem = NSMenuItem(title: permTitle, action: #selector(openAccessibilityPreferences), keyEquivalent: "")
         permItem.target = self
         menu.addItem(permItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // 2. Ações rápidas de Snap
-        let leftItem = NSMenuItem(title: "Metade Esquerda", action: #selector(snapLeft), keyEquivalent: "")
+        // 2. Quick Snap actions
+        let leftItem = NSMenuItem(title: "Left Half", action: #selector(snapLeft), keyEquivalent: "")
         leftItem.target = self
         menu.addItem(leftItem)
 
-        let rightItem = NSMenuItem(title: "Metade Direita", action: #selector(snapRight), keyEquivalent: "")
+        let rightItem = NSMenuItem(title: "Right Half", action: #selector(snapRight), keyEquivalent: "")
         rightItem.target = self
         menu.addItem(rightItem)
 
-        let maxItem = NSMenuItem(title: "Maximizar Janela", action: #selector(snapMaximize), keyEquivalent: "")
+        let maxItem = NSMenuItem(title: "Maximize Window", action: #selector(snapMaximize), keyEquivalent: "")
         maxItem.target = self
         menu.addItem(maxItem)
 
-        let centerItem = NSMenuItem(title: "Centralizar (Terço Médio)", action: #selector(snapCenter), keyEquivalent: "")
+        let centerItem = NSMenuItem(title: "Center (Middle Third)", action: #selector(snapCenter), keyEquivalent: "")
         centerItem.target = self
         menu.addItem(centerItem)
 
-        // 3. Submenu de Colunas e Assimétricos Horizontais (16:9 / Ultrawide)
+        // 3. Submenu for Horizontal Columns and Asymmetric splits (16:9 / Ultrawide)
         let horizontalMenu = NSMenu()
-        let leftThirdItem = NSMenuItem(title: "Coluna Esquerda (1/3)", action: #selector(snapLeftThird), keyEquivalent: "")
+        let leftThirdItem = NSMenuItem(title: "Left Column (1/3)", action: #selector(snapLeftThird), keyEquivalent: "")
         leftThirdItem.target = self
         horizontalMenu.addItem(leftThirdItem)
 
-        let centerThirdItem = NSMenuItem(title: "Coluna Central (1/3)", action: #selector(snapCenter), keyEquivalent: "")
+        let centerThirdItem = NSMenuItem(title: "Center Column (1/3)", action: #selector(snapCenter), keyEquivalent: "")
         centerThirdItem.target = self
         horizontalMenu.addItem(centerThirdItem)
 
-        let rightThirdItem = NSMenuItem(title: "Coluna Direita (1/3)", action: #selector(snapRightThird), keyEquivalent: "")
+        let rightThirdItem = NSMenuItem(title: "Right Column (1/3)", action: #selector(snapRightThird), keyEquivalent: "")
         rightThirdItem.target = self
         horizontalMenu.addItem(rightThirdItem)
 
         horizontalMenu.addItem(NSMenuItem.separator())
 
-        let leftTwoThirdsItem = NSMenuItem(title: "Esquerda 2/3 + Direita 1/3", action: #selector(snapLeftTwoThirds), keyEquivalent: "")
+        let leftTwoThirdsItem = NSMenuItem(title: "Left 2/3 + Right 1/3", action: #selector(snapLeftTwoThirds), keyEquivalent: "")
         leftTwoThirdsItem.target = self
         horizontalMenu.addItem(leftTwoThirdsItem)
 
-        let leftOneThirdItem = NSMenuItem(title: "Esquerda 1/3 + Direita 2/3 (Inverso)", action: #selector(snapLeftOneThird), keyEquivalent: "")
+        let leftOneThirdItem = NSMenuItem(title: "Left 1/3 + Right 2/3 (Inverse)", action: #selector(snapLeftOneThird), keyEquivalent: "")
         leftOneThirdItem.target = self
         horizontalMenu.addItem(leftOneThirdItem)
 
-        let horizontalParentItem = NSMenuItem(title: "Layouts Horizontais (16:9)", action: nil, keyEquivalent: "")
+        let horizontalParentItem = NSMenuItem(title: "Horizontal Layouts (16:9)", action: nil, keyEquivalent: "")
         horizontalParentItem.submenu = horizontalMenu
         menu.addItem(horizontalParentItem)
 
-        // 4. Submenu de Layouts Verticais
+        // 4. Submenu for Vertical Layouts (Portrait)
         let verticalMenu = NSMenu()
-        let topHalfItem = NSMenuItem(title: "Metade Superior", action: #selector(snapTopHalf), keyEquivalent: "")
+        let topHalfItem = NSMenuItem(title: "Top Half", action: #selector(snapTopHalf), keyEquivalent: "")
         topHalfItem.target = self
         verticalMenu.addItem(topHalfItem)
 
-        let bottomHalfItem = NSMenuItem(title: "Metade Inferior", action: #selector(snapBottomHalf), keyEquivalent: "")
+        let bottomHalfItem = NSMenuItem(title: "Bottom Half", action: #selector(snapBottomHalf), keyEquivalent: "")
         bottomHalfItem.target = self
         verticalMenu.addItem(bottomHalfItem)
 
         verticalMenu.addItem(NSMenuItem.separator())
 
-        let topThirdItem = NSMenuItem(title: "Terço Superior (1/3)", action: #selector(snapTopThird), keyEquivalent: "")
+        let topThirdItem = NSMenuItem(title: "Top Third (1/3)", action: #selector(snapTopThird), keyEquivalent: "")
         topThirdItem.target = self
         verticalMenu.addItem(topThirdItem)
 
-        let middleThirdItem = NSMenuItem(title: "Terço Médio (1/3)", action: #selector(snapMiddleThird), keyEquivalent: "")
+        let middleThirdItem = NSMenuItem(title: "Middle Third (1/3)", action: #selector(snapMiddleThird), keyEquivalent: "")
         middleThirdItem.target = self
         verticalMenu.addItem(middleThirdItem)
 
-        let bottomThirdItem = NSMenuItem(title: "Terço Inferior (1/3)", action: #selector(snapBottomThird), keyEquivalent: "")
+        let bottomThirdItem = NSMenuItem(title: "Bottom Third (1/3)", action: #selector(snapBottomThird), keyEquivalent: "")
         bottomThirdItem.target = self
         verticalMenu.addItem(bottomThirdItem)
 
         verticalMenu.addItem(NSMenuItem.separator())
 
-        let topTwoThirdsItem = NSMenuItem(title: "Topo 2/3 + Base 1/3", action: #selector(snapTopTwoThirds), keyEquivalent: "")
+        let topTwoThirdsItem = NSMenuItem(title: "Top 2/3 + Bottom 1/3", action: #selector(snapTopTwoThirds), keyEquivalent: "")
         topTwoThirdsItem.target = self
         verticalMenu.addItem(topTwoThirdsItem)
 
-        let bottomTwoThirdsItem = NSMenuItem(title: "Topo 1/3 + Base 2/3 (Inverso)", action: #selector(snapBottomTwoThirds), keyEquivalent: "")
+        let bottomTwoThirdsItem = NSMenuItem(title: "Top 1/3 + Bottom 2/3 (Inverse)", action: #selector(snapBottomTwoThirds), keyEquivalent: "")
         bottomTwoThirdsItem.target = self
         verticalMenu.addItem(bottomTwoThirdsItem)
 
-        let verticalParentItem = NSMenuItem(title: "Layouts Verticais (Portrait)", action: nil, keyEquivalent: "")
+        let verticalParentItem = NSMenuItem(title: "Vertical Layouts (Portrait)", action: nil, keyEquivalent: "")
         verticalParentItem.submenu = verticalMenu
         menu.addItem(verticalParentItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        let detectItem = NSMenuItem(title: "Reconectar Janelas Adjacentes", action: #selector(autoDetectWindows), keyEquivalent: "d")
+        let detectItem = NSMenuItem(title: "Reconnect Adjacent Windows", action: #selector(autoDetectWindows), keyEquivalent: "d")
         detectItem.target = self
         menu.addItem(detectItem)
 
-        let clearPairItem = NSMenuItem(title: "Desfazer Divisor Emparelhado", action: #selector(clearPairing), keyEquivalent: "")
+        let clearPairItem = NSMenuItem(title: "Clear Paired Divider", action: #selector(clearPairing), keyEquivalent: "")
         clearPairItem.target = self
         menu.addItem(clearPairItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // Iniciar com o Mac (Launch at Login via SMAppService)
+        // Launch at Login via SMAppService
         let isLaunchAtLogin = isLoginItemEnabled()
         let launchItem = NSMenuItem(
-            title: isLaunchAtLogin ? "✓ Iniciar com o Mac" : "Iniciar com o Mac",
+            title: isLaunchAtLogin ? "✓ Launch at Login" : "Launch at Login",
             action: #selector(toggleLaunchAtLogin),
             keyEquivalent: ""
         )
@@ -206,8 +206,8 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
-        // 3. Sair
-        let quitItem = NSMenuItem(title: "Encerrar MacSnap", action: #selector(quitApp), keyEquivalent: "q")
+        // Quit MacSnap
+        let quitItem = NSMenuItem(title: "Quit MacSnap", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
@@ -296,13 +296,13 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         do {
             if SMAppService.mainApp.status == .enabled {
                 try SMAppService.mainApp.unregister()
-                print("[MacSnap] Desregistrado de itens de início.")
+                print("[MacSnap] Unregistered from login items.")
             } else {
                 try SMAppService.mainApp.register()
-                print("[MacSnap] Registrado para iniciar com o Mac com sucesso.")
+                print("[MacSnap] Successfully registered to launch at login.")
             }
         } catch {
-            print("[MacSnap] Erro ao alterar inicialização no login via SMAppService: \(error)")
+            print("[MacSnap] Error toggling launch at login via SMAppService: \(error)")
         }
         rebuildMenu()
     }

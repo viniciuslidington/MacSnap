@@ -1,7 +1,7 @@
 import Cocoa
 
-/// Janela flutuante que atua como a barra divisória interativa entre duas janelas emparelhadas.
-/// Suporta orientação vertical (⬌) para janelas lado a lado e horizontal (⬍) para janelas empilhadas no monitor vertical.
+/// Floating panel that serves as the interactive resize divider between two paired windows.
+/// Supports vertical orientation (⬌) for side-by-side windows and horizontal (⬍) for stacked windows on portrait displays.
 @MainActor
 public final class DividerHandleWindow: NSPanel {
     public var onDividerDragged: ((CGFloat) -> Void)?
@@ -28,7 +28,7 @@ public final class DividerHandleWindow: NSPanel {
         self.contentView = customView
     }
 
-    /// Atualiza o divisor com base no objeto `PairedSplit`.
+    /// Updates the divider based on a `PairedSplit` instance.
     public func update(for pair: PairedSplit) {
         customView.orientation = pair.orientation
         self.setFrame(pair.dividerFrame, display: true)
@@ -37,7 +37,7 @@ public final class DividerHandleWindow: NSPanel {
         }
     }
 
-    /// Método legado para compatibilidade horizontal.
+    /// Legacy method for horizontal compatibility.
     public func updatePosition(dividerX: CGFloat, visibleFrame: CGRect) {
         let handleWidth: CGFloat = 20.0
         let frame = CGRect(
@@ -54,7 +54,7 @@ public final class DividerHandleWindow: NSPanel {
     }
 }
 
-/// View responsável pelo desenho do separador e captura de arraste do mouse.
+/// View responsible for rendering the separator and capturing mouse drag events.
 final class DividerCustomView: NSView {
     weak var dividerWindow: DividerHandleWindow?
     var orientation: SplitOrientation = .horizontal {
@@ -70,7 +70,7 @@ final class DividerCustomView: NSView {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        alphaValue = 0.0 // Oculto por padrão para não poluir a tela
+        alphaValue = 0.0 // Hidden by default to keep the desktop clean
         setupTrackingArea()
     }
 
@@ -91,7 +91,7 @@ final class DividerCustomView: NSView {
         self.addTrackingArea(trackingArea)
     }
 
-    // CRUCIAL: Permite que o primeiro clique seja imediatamente capturado mesmo com outros apps em foco
+    // Allows the first click to be immediately captured even when another app is focused
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         return true
     }
@@ -127,7 +127,6 @@ final class DividerCustomView: NSView {
         needsDisplay = true
     }
 
-    // CRUCIAL: Inicia o rastreamento de arraste do mouse
     override func mouseDown(with event: NSEvent) {
         isDragging = true
         self.alphaValue = 1.0
@@ -169,7 +168,7 @@ final class DividerCustomView: NSView {
 
         let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
 
-        // 1. Linha divisória de vidro translúcido ao longo da intercessão
+        // 1. Translucent glass divider line along the window intersection
         let activeLineColor = isDark
             ? NSColor(white: 1.0, alpha: 0.75)
             : NSColor(white: 0.25, alpha: 0.65)
@@ -192,7 +191,7 @@ final class DividerCustomView: NSView {
             linePath.stroke()
         }
 
-        // 2. Pílula central de vidro translúcido (Apple Glass Handle)
+        // 2. Central Apple Glass pill handle
         let pillRect: NSRect
         if orientation == .horizontal {
             let pillWidth: CGFloat = 6.0
@@ -224,7 +223,7 @@ final class DividerCustomView: NSView {
         pillFillColor.setFill()
         path.fill()
 
-        // Borda sutil de vidro na pílula
+        // Subtle glass stroke on pill handle
         let pillStrokeColor = isDark ? NSColor(white: 1.0, alpha: 0.40) : NSColor(white: 0.0, alpha: 0.20)
         pillStrokeColor.setStroke()
         path.lineWidth = 0.8

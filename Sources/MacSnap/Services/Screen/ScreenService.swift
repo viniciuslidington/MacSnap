@@ -2,7 +2,7 @@ import Foundation
 import Cocoa
 import CoreGraphics
 
-/// Gerencia a descoberta de telas e os cálculos de dimensões e visibilidade de monitores.
+/// Manages display discovery and calculates screen dimensions and visibility across monitors.
 public final class ScreenService: ScreenServiceProtocol, @unchecked Sendable {
     public static let shared = ScreenService()
 
@@ -21,12 +21,12 @@ public final class ScreenService: ScreenServiceProtocol, @unchecked Sendable {
     }
 
     public func screenContaining(point: CGPoint) -> NSScreen? {
-        // No Cocoa, as telas estão posicionadas no mesmo espaço global onde o ponto do mouse reside
+        // In Cocoa, displays exist in the same global coordinates where mouse location resides
         return screens.first { $0.frame.contains(point) } ?? primaryScreen
     }
 
     public func screenContaining(rect: CGRect) -> NSScreen? {
-        // Encontra a tela com maior sobreposição com o retângulo
+        // Finds the screen with the largest overlap area with the given rectangle
         var bestScreen: NSScreen?
         var maxIntersectionArea: CGFloat = 0
 
@@ -44,12 +44,12 @@ public final class ScreenService: ScreenServiceProtocol, @unchecked Sendable {
 }
 
 extension NSScreen {
-    /// Indica se o monitor está posicionado na orientação vertical (altura maior que largura).
+    /// Indicates whether the display is oriented vertically (height greater than width).
     public var isPortrait: Bool {
         return frame.height > frame.width
     }
 
-    /// Identificador numérico único do display no macOS (CGDirectDisplayID).
+    /// Unique numeric display identifier in macOS (CGDirectDisplayID).
     public var displayID: CGDirectDisplayID {
         let key = NSDeviceDescriptionKey("NSScreenNumber")
         if let id = deviceDescription[key] as? NSNumber {

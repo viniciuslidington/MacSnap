@@ -26,7 +26,7 @@ jobs:
         run: |
           mkdir -p MacSnap.app/Contents/MacOS
           mkdir -p MacSnap.app/Contents/Resources
-          # Procura o binário gerado universal
+          # Locate generated universal binary
           RELEASE_BIN=$(find .build -name "MacSnap" -type f -perm +111 | grep -i "release" | head -n 1)
           cp "$RELEASE_BIN" MacSnap.app/Contents/MacOS/MacSnap
           chmod +x MacSnap.app/Contents/MacOS/MacSnap

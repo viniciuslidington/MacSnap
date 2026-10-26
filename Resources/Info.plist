@@ -25,6 +25,6 @@
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSAccessibilityUsageDescription</key>
-    <string>O MacSnap precisa de permissões de Acessibilidade para gerenciar e redimensionar janelas na tela.</string>
+    <string>MacSnap requires Accessibility permissions to position and resize windows on screen.</string>
 </dict>
 </plist>

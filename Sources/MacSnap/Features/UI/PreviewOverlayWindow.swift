@@ -1,9 +1,9 @@
 import Cocoa
 import QuartzCore
 
-/// Janela de sobreposição translúcida que renderiza a área para onde a janela irá ao ser solta,
-/// com desenho uniforme em todos os 4 lados e nível de exibição superior (`.screenSaver`)
-/// para garantir visibilidade perfeita mesmo sobre janelas em foco com sombras.
+/// Translucent overlay window that renders the snap target zone where a window will dock upon release.
+/// Features uniform 4-sided rendering and an elevated window level (`.screenSaver - 5`)
+/// to guarantee clear visibility even over frontmost windows with drop shadows.
 @MainActor
 public final class PreviewOverlayWindow: NSWindow {
     private let previewView = PreviewContentView()
@@ -19,7 +19,7 @@ public final class PreviewOverlayWindow: NSWindow {
 
         self.isOpaque = false
         self.backgroundColor = .clear
-        // Nível inferior ao SnapLayoutBarWindow para garantir que a barra fique sempre por cima da prévia
+        // Below SnapLayoutBarWindow so layout cards remain on top of the preview
         self.level = NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue - 5)
         self.ignoresMouseEvents = true
         self.hasShadow = true
@@ -28,9 +28,9 @@ public final class PreviewOverlayWindow: NSWindow {
         self.contentView = previewView
     }
 
-    /// Exibe ou anima a janela de pré-visualização para o frame desejado.
+    /// Displays or animates the preview overlay to the specified frame.
     public func present(at targetRect: CGRect, animated: Bool = true) {
-        // Evita reanimar repetidamente quando o cursor se move mantendo a mesma zona de snap
+        // Avoid repeated re-animation when cursor moves while maintaining the same snap zone
         if self.isVisible && self.currentTargetRect == targetRect {
             return
         }
@@ -39,7 +39,7 @@ public final class PreviewOverlayWindow: NSWindow {
         if !self.isVisible {
             self.setFrame(targetRect, display: true)
             self.alphaValue = 0.0
-            // orderFrontRegardless garante que a janela suba mesmo com outro app em primeiro plano
+            // orderFrontRegardless ensures the window is visible even with another app focused
             self.orderFrontRegardless()
 
             NSAnimationContext.runAnimationGroup { context in
@@ -60,7 +60,7 @@ public final class PreviewOverlayWindow: NSWindow {
         }
     }
 
-    /// Esconde a janela de pré-visualização com fade-out.
+    /// Hides the preview window with a smooth fade-out.
     public func dismiss() {
         guard self.isVisible else { return }
         self.currentTargetRect = nil
@@ -76,8 +76,8 @@ public final class PreviewOverlayWindow: NSWindow {
     }
 }
 
-/// View personalizada que renderiza a área de pré-visualização no estilo Apple Glass UI,
-/// utilizando vidro fosco translúcido, tom cinza claro e reflexos especulares nas bordas.
+/// Custom view that renders the preview zone in Apple Glass UI styling,
+/// utilizing translucent frosted glass, subtle light-gray depth, and specular edge reflections.
 final class PreviewContentView: NSView {
     private let visualEffectView = NSVisualEffectView()
     private let canvasView = PreviewOverlayCanvasView()
@@ -127,14 +127,14 @@ final class PreviewContentView: NSView {
         let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
         let path = NSBezierPath(roundedRect: innerRect, xRadius: cornerRadius, yRadius: cornerRadius)
 
-        // 1. Fundo translúcido cinza claro bem mais transparente (Apple Glass UI)
+        // 1. Light translucent frosted background (Apple Glass UI)
         let glassFillColor = isDark
             ? NSColor(white: 1.0, alpha: 0.06)
             : NSColor(white: 1.0, alpha: 0.10)
         glassFillColor.setFill()
         path.fill()
 
-        // 2. Borda externa luminosa de vidro lapidado (Specular Rim)
+        // 2. Luminous outer specular rim
         let outerRimColor = isDark
             ? NSColor(white: 1.0, alpha: 0.45)
             : NSColor(white: 0.20, alpha: 0.28)
@@ -142,7 +142,7 @@ final class PreviewContentView: NSView {
         path.lineWidth = 1.4
         path.stroke()
 
-        // 3. Reflexo interno de luz para acabamento refinado de vidro (Inner Specular Glow)
+        // 3. Inner specular light glow for a refined glass finish
         let innerGlowRect = innerRect.insetBy(dx: 1.5, dy: 1.5)
         if innerGlowRect.width > 0 && innerGlowRect.height > 0 {
             let innerPath = NSBezierPath(
@@ -160,7 +160,7 @@ final class PreviewContentView: NSView {
     }
 }
 
-/// Canvas overlay para desenho da borda e brilho do preview sobre o NSVisualEffectView.
+/// Canvas overlay for drawing the borders and specular glow on top of NSVisualEffectView.
 final class PreviewOverlayCanvasView: NSView {
     var onDraw: ((NSRect) -> Void)?
 

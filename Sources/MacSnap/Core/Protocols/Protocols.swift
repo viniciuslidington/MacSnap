@@ -2,53 +2,53 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-/// Contrato para serviços que interagem com a Accessibility API do macOS.
+/// Contract for services interacting with the macOS Accessibility API.
 public protocol AccessibilityServiceProtocol: Sendable {
-    /// Verifica se a permissão de acessibilidade está habilitada nas preferências do macOS.
-    /// - Parameter promptIfNeeded: Se true, exibe a caixa de diálogo do sistema pedindo autorização.
+    /// Checks whether accessibility permissions are granted in System Settings.
+    /// - Parameter promptIfNeeded: If true, displays the system dialog requesting authorization.
     func isAccessibilityGranted(promptIfNeeded: Bool) -> Bool
 
-    /// Obtém a janela atualmente focada pelo usuário.
+    /// Returns the currently focused window.
     func getFocusedWindow() -> WindowElement?
 
-    /// Obtém a janela localizada sob um ponto específico da tela (em coordenadas de Accessibility).
+    /// Returns the window located under a specific point (in Accessibility coordinates).
     func getWindowUnderPoint(_ point: CGPoint) -> WindowElement?
 }
 
-/// Contrato para gerenciamento de telas e cálculos de geometria de monitores.
+/// Contract for display management and screen geometry calculations.
 public protocol ScreenServiceProtocol: Sendable {
-    /// Todas as telas ativas no macOS.
+    /// All active displays in macOS.
     var screens: [NSScreen] { get }
 
-    /// A tela primária do sistema (cujo canto inferior esquerdo é a origem 0,0 no Cocoa).
+    /// The primary display (whose bottom-left corner is origin (0,0) in Cocoa).
     var primaryScreen: NSScreen? { get }
 
-    /// Altura da tela primária (necessária para conversão de coordenadas com Accessibility).
+    /// Height of the primary display (required for coordinate conversions with Accessibility).
     var primaryScreenHeight: CGFloat { get }
 
-    /// Encontra a tela que contém o ponto indicado (em coordenadas Cocoa).
+    /// Finds the display containing the specified point (in Cocoa coordinates).
     func screenContaining(point: CGPoint) -> NSScreen?
 
-    /// Encontra a tela que contém o retângulo indicado.
+    /// Finds the display containing the specified rectangle.
     func screenContaining(rect: CGRect) -> NSScreen?
 }
 
-/// Contrato para o motor de aplicação de Snap em janelas.
+/// Contract for the window snapping engine.
 @MainActor
 public protocol WindowSnappingProtocol: AnyObject {
-    /// Aplica uma zona de snap à janela focada.
+    /// Applies a snap target zone to the currently focused window.
     func snapFocusedWindow(to zone: SnapZone)
 
-    /// Aplica uma zona de snap a uma janela específica.
+    /// Applies a snap target zone to a specific window on a target display.
     func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen)
 }
 
-/// Contrato para monitoramento de eventos de entrada (mouse e teclado).
+/// Contract for mouse and keyboard event monitoring.
 @MainActor
 public protocol EventMonitoringProtocol: AnyObject {
-    /// Inicia o monitoramento de eventos de arraste do mouse para detecção de snap.
+    /// Starts monitoring mouse drag events for snap detection.
     func startMonitoring()
 
-    /// Interrompe o monitoramento de eventos.
+    /// Stops event monitoring.
     func stopMonitoring()
 }

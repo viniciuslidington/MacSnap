@@ -1,7 +1,7 @@
 import Cocoa
 
-/// Orquestra a aplicação de regras de snap em janelas, calculando tamanhos de tela e
-/// registrando emparelhamentos quando aplicável.
+/// Orchestrates window snapping rules, calculating screen geometries and
+/// registering pairings when applicable.
 @MainActor
 public final class SnapEngine: WindowSnappingProtocol {
     public static let shared = SnapEngine()
@@ -22,11 +22,11 @@ public final class SnapEngine: WindowSnappingProtocol {
 
     public func snapFocusedWindow(to zone: SnapZone) {
         guard let window = accessibilityService.getFocusedWindow() else {
-            print("[SnapEngine] Nenhuma janela em foco encontrada.")
+            print("[SnapEngine] No focused window found.")
             return
         }
 
-        // Descobre em qual tela a janela está
+        // Determine which screen contains the window
         let primaryHeight = screenService.primaryScreenHeight
         guard let currentCocoaFrame = window.cocoaFrame(primaryScreenHeight: primaryHeight),
               let screen = screenService.screenContaining(rect: currentCocoaFrame) else {
@@ -43,8 +43,8 @@ public final class SnapEngine: WindowSnappingProtocol {
         let visibleFrame = screen.visibleFrame
         let primaryHeight = screenService.primaryScreenHeight
 
-        // Encaixe inteligente sem sobreposição: se já houver uma janela parceira na tela (ex: Xcode no topo),
-        // calcula o retângulo exato restante para encaixar como peça de quebra-cabeça
+        // Smart flush snapping without overlap: if a paired window already exists (e.g. Xcode at top),
+        // calculate the exact remaining space to dock flush like a puzzle piece
         let targetRect: CGRect
         if let flush = pairingManager.calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: window) {
             targetRect = flush.targetRect

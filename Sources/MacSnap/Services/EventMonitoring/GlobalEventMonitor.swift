@@ -1,9 +1,9 @@
 import Cocoa
 import CoreGraphics
 
-/// Monitora eventos globais de cursor do mouse usando `CGEventTap` para detectar
-/// quando o usuário arrasta uma janela até as bordas da tela e aciona o Snap.
-/// Possui suporte inteligente para monitores verticais com a Snap Bar de layouts.
+/// Monitors global mouse cursor events using `CGEventTap` to detect
+/// when the user drags a window to screen edges or uses the Snap Layout Bar.
+/// Includes intelligent multi-monitor cursor following for vertical and horizontal displays.
 @MainActor
 public final class GlobalEventMonitor: EventMonitoringProtocol {
     public static let shared = GlobalEventMonitor()
@@ -61,14 +61,14 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         )
 
         guard let tap = eventTap else {
-            print("[GlobalEventMonitor] Aviso: Não foi possível criar o CGEventTap. Verifique permissões de Acessibilidade.")
+            print("[GlobalEventMonitor] Warning: Unable to create CGEventTap. Please verify Accessibility permissions.")
             return
         }
 
         runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
         CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
-        print("[GlobalEventMonitor] Monitoramento de arraste ativado.")
+        print("[GlobalEventMonitor] Drag monitoring active.")
     }
 
     public func stopMonitoring() {
@@ -106,25 +106,25 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private func handleDrag(at point: CGPoint) {
         guard let screen = screenService.screenContaining(point: point) else { return }
 
-        // Captura a janela que está sendo arrastada no início do movimento antes que o foco mude
+        // Capture the dragged window at the start of movement before focus changes
         if currentDraggedWindow == nil {
             currentDraggedWindow = accessibilityService.getFocusedWindow()
             dragStartPoint = point
         }
 
-        // Detecta se o usuário está de fato segurando uma aba/janela em arraste
+        // Determine if user is actively dragging a window/tab
         let dragDist = hypot(point.x - (dragStartPoint?.x ?? point.x), point.y - (dragStartPoint?.y ?? point.y))
         if !isHoldingWindowOrTab && dragDist >= 4.0 && currentDraggedWindow != nil {
             isHoldingWindowOrTab = true
         }
 
-        // Se estiver segurando a janela/aba, exibe imediatamente a barra colapsada (pílula)
-        // no topo do monitor onde o mouse está localizado, acompanhando a troca de telas
+        // When dragging a window, immediately present the collapsed Apple Glass pill
+        // at the top of the monitor where the cursor currently is, tracking display switches
         if isHoldingWindowOrTab {
             if snapLayoutBar.presentationState == .hidden {
                 snapLayoutBar.presentPill(on: screen)
             } else if snapLayoutBar.currentScreen != screen {
-                // Usuário moveu a janela para outro monitor: a pílula migra para o topo do novo monitor
+                // User moved the window to another display: migrate pill to the new screen's top
                 snapLayoutBar.presentPill(on: screen)
             }
         }
@@ -144,29 +144,29 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
         var detectedZone: SnapZone?
 
-        // 1. Interação com a SnapLayoutBar (Pílula ou Expandida)
+        // 1. Interaction with SnapLayoutBar (Pill or Expanded)
         if snapLayoutBar.presentationState == .pill {
-            // Se o cursor se aproximar da pílula no topo da tela, ela se expande suavemente
+            // Expand fluidly when cursor approaches the pill
             _ = snapLayoutBar.checkHover(at: point)
         } else if snapLayoutBar.presentationState == .expanded {
             let flyoutHitArea = snapLayoutBar.frame.insetBy(dx: -25, dy: -25)
             if flyoutHitArea.contains(point) {
-                // Cursor está sobre a barra expandida: seleciona o slot correspondente
+                // Cursor hovering over layout cards: select matching slot
                 detectedZone = snapLayoutBar.checkHover(at: point)
             } else {
-                // Cursor se afastou dos cartões: recolhe de volta para a pílula discreta
+                // Cursor moved away from expanded flyout: collapse smoothly back to pill
                 snapLayoutBar.collapseToPill()
             }
         }
 
-        // 2. Ações nas bordas da tela quando nenhuma opção da barra expandida estiver selecionada
+        // 2. Screen edge snapping when no layout bar slot is hovered
         if detectedZone == nil {
             if isPortrait {
                 if isBottom {
-                    // Regra: Vértices inferiores e borda inferior padronizados em 50/50 (Metade Inferior)
+                    // Standard bottom edge: 50/50 bottom half
                     detectedZone = .bottomHalf
                 } else if isLeft || isRight {
-                    // Regra: Bordas laterais sugerem a divisão em 1/3 de acordo com a altura do cursor
+                    // Side edges suggest thirds (1/3) based on cursor height
                     let relativeY = point.y - visibleFrame.minY
                     let thirdHeight = visibleFrame.height / 3.0
 
@@ -181,7 +181,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
                     detectedZone = .topHalf
                 }
             } else {
-                // Detecção de cantos (quadrantes) no monitor horizontal
+                // Corner quadrants on horizontal display
                 if isLeft && isNearTop {
                     detectedZone = .topLeftQuarter
                 } else if isRight && isNearTop {
@@ -190,7 +190,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
                     detectedZone = .bottomLeftQuarter
                 } else if isRight && isNearBottom {
                     detectedZone = .bottomRightQuarter
-                // Metades e maximização
+                // Halves and maximize
                 } else if isTop && snapLayoutBar.presentationState != .expanded {
                     detectedZone = .maximize
                 } else if isLeft {
@@ -207,8 +207,8 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             self.activeZone = zone
             self.activeScreen = screen
 
-            // Preview dinâmico inteligente: se houver parceiro (como Xcode), a caixa azul
-            // para exatamente na borda dele, evitando a sobreposição visual feia na tela
+            // Intelligent dynamic preview: if an adjacent paired window exists,
+            // flush preview boundary against it to avoid ugly screen overlap
             let targetRect: CGRect
             if let flush = PairedResizeManager.shared.calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: currentDraggedWindow) {
                 targetRect = flush.targetRect

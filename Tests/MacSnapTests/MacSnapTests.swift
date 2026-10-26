@@ -7,7 +7,7 @@ import AppKit
 struct SnapGeometryTests {
 
     @Test func testSnapZoneHalfCalculations() {
-        // Simula uma tela de 1920x1080 com margem do dock/menu (ex: 1920x1050 visível)
+        // Simulates a 1920x1080 display with dock/menu margins (e.g. 1920x1050 visible)
         let visibleFrame = CGRect(x: 0, y: 0, width: 1920, height: 1050)
 
         let leftRect = SnapZone.leftHalf.targetRect(for: visibleFrame)
@@ -38,17 +38,17 @@ struct SnapGeometryTests {
 
     @Test func testCoordinateConversionCocoaToAX() {
         let primaryHeight: CGFloat = 1080.0
-        // Uma janela no topo da tela em Cocoa: Y = 880 (de 880 a 1080, altura 200)
+        // A window at top of screen in Cocoa: Y = 880 (from 880 to 1080, height 200)
         let cocoaTopWindow = CGRect(x: 100, y: 880, width: 400, height: 200)
 
         let axRect = ScreenGeometry.cocoaToAX(cocoaRect: cocoaTopWindow, primaryScreenHeight: primaryHeight)
-        // No AX, o topo é Y = 0
+        // In AX, top is Y = 0
         #expect(axRect.origin.x == 100)
         #expect(axRect.origin.y == 0)
         #expect(axRect.width == 400)
         #expect(axRect.height == 200)
 
-        // Converte de volta para Cocoa e verifica paridade
+        // Converts back to Cocoa and verifies parity
         let restoredCocoa = ScreenGeometry.axToCocoa(axRect: axRect, primaryScreenHeight: primaryHeight)
         #expect(restoredCocoa == cocoaTopWindow)
     }
@@ -56,8 +56,8 @@ struct SnapGeometryTests {
     @Test func testPairedSplitRatioCalculations() {
         let visibleFrame = CGRect(x: 0, y: 0, width: 2000, height: 1000)
 
-        // Criamos o objeto fictício para cálculo
-        // Usamos ratio de 0.4 (40% para a esquerda, 60% para a direita)
+        // Create dummy elements for calculation
+        // Use 0.4 ratio (40% to the left, 60% to the right)
         let dummyLeft = WindowElement(element: AXUIElementCreateSystemWide(), pid: 1)
         let dummyRight = WindowElement(element: AXUIElementCreateSystemWide(), pid: 2)
         let pair = PairedSplit(leftWindow: dummyLeft, rightWindow: dummyRight, visibleFrame: visibleFrame, ratio: 0.4)
@@ -70,16 +70,16 @@ struct SnapGeometryTests {
         #expect(rightRect.origin.x == 800)
         #expect(pair.dividerX == 800)
 
-        // Testa o clamp de proporção mínima e máxima
+        // Tests minimum and maximum ratio clamping
         pair.ratio = 0.05
-        #expect(pair.ratio == 0.15) // Não deixa diminuir além de 15%
+        #expect(pair.ratio == 0.15) // Does not allow decreasing below 15%
 
         pair.ratio = 0.99
-        #expect(pair.ratio == 0.85) // Não deixa passar de 85%
+        #expect(pair.ratio == 0.85) // Does not allow exceeding 85%
     }
 
     @Test func testVerticalPairedSplitWithMagneticSnapping() {
-        // Simula tela vertical 1080x1920
+        // Simulates vertical display 1080x1920
         let visibleFrame = CGRect(x: 0, y: 0, width: 1080, height: 1920)
         let dummyTop = WindowElement(element: AXUIElementCreateSystemWide(), pid: 10)
         let dummyBottom = WindowElement(element: AXUIElementCreateSystemWide(), pid: 11)
@@ -99,20 +99,20 @@ struct SnapGeometryTests {
         #expect(topRect.origin.y == 960)
         #expect(verticalPair.dividerY == 960)
 
-        // Testa atração magnética em 50%
-        // Se o cursor estiver em Y = 980 (que seria ratio ~0.49), deve travar magneticamente em 0.50
+        // Tests magnetic snapping at 50%
+        // If cursor is at Y = 980 (which would be ratio ~0.49), must lock magnetically to 0.50
         verticalPair.updateRatioFromCursor(cursorCoordinate: 980, primaryScreenHeight: 1920)
         #expect(verticalPair.ratio == 0.50)
 
-        // Testa atração magnética em 1/3 (quando ratio for ~0.333)
-        // cursorCoordinate correspondente a ~34% do topo
+        // Tests magnetic snapping at 1/3 (when ratio is ~0.333)
+        // cursorCoordinate corresponding to ~34% from the top
         let cursorForOneThird = 1920.0 * (1.0 - 0.34)
         verticalPair.updateRatioFromCursor(cursorCoordinate: cursorForOneThird, primaryScreenHeight: 1920)
         #expect(abs(verticalPair.ratio - (1.0 / 3.0)) < 0.001)
     }
 
     @Test func testVerticalMonitorThirdsCalculations() {
-        // Simula um monitor vertical (1080 x 1920, visível 1080 x 1890)
+        // Simulates a portrait monitor (1080 x 1920, visible 1080 x 1890)
         let visibleFrame = CGRect(x: 0, y: 0, width: 1080, height: 1890)
         let expectedThirdHeight: CGFloat = 1890.0 / 3.0 // 630
 
@@ -137,10 +137,10 @@ struct SnapGeometryTests {
     }
 
     @Test func testHorizontalAsymmetricAndThreeColumnCalculations() {
-        // Simula monitor 16:9 padrão (1920x1080)
+        // Simulates standard 16:9 monitor (1920x1080)
         let visibleFrame = CGRect(x: 0, y: 0, width: 1920, height: 1080)
 
-        // 3 Colunas iguais
+        // 3 equal columns
         let leftThird = SnapZone.leftThird.targetRect(for: visibleFrame)
         #expect(leftThird.origin.x == 0)
         #expect(leftThird.width == 640)
@@ -154,7 +154,7 @@ struct SnapGeometryTests {
         #expect(rightThird.origin.x == 1280)
         #expect(rightThird.width == 640)
 
-        // Assimétrico 2/3 + 1/3
+        // Asymmetric 2/3 + 1/3
         let left23 = SnapZone.leftTwoThirds.targetRect(for: visibleFrame)
         #expect(left23.origin.x == 0)
         #expect(left23.width == 1280)
@@ -163,7 +163,7 @@ struct SnapGeometryTests {
         #expect(right13.origin.x == 1280)
         #expect(right13.width == 640)
 
-        // Assimétrico Invertido: 1/3 + 2/3
+        // Inverted Asymmetric: 1/3 + 2/3
         let left13 = SnapZone.leftOneThird.targetRect(for: visibleFrame)
         #expect(left13.origin.x == 0)
         #expect(left13.width == 640)
@@ -179,8 +179,8 @@ struct SnapGeometryTests {
         let barView = barWindow.contentView
         #expect(barView != nil)
         #expect(barView?.subviews.count == 2)
-        // Subview 0 é o backdrop de desfoque (NSVisualEffectView)
-        // Subview 1 é o canvas de desenho dos cartões, garantindo que os itens nunca sejam encobertos
+        // Subview 0 is the blur backdrop (NSVisualEffectView)
+        // Subview 1 is the cards canvas, ensuring items are never obscured
         #expect(barView?.subviews.first is NSVisualEffectView)
         #expect(barView?.subviews.last is SnapBarCanvasView)
 
@@ -191,7 +191,7 @@ struct SnapGeometryTests {
         #expect(previewView?.subviews.first is NSVisualEffectView)
         #expect(previewView?.subviews.last is PreviewOverlayCanvasView)
 
-        // Garante que o modal fique estritamente à frente do retângulo de prévia
+        // Ensures the modal sits strictly in front of the preview rectangle
         #expect(barWindow.level > previewWindow.level)
     }
 
@@ -206,7 +206,7 @@ struct SnapGeometryTests {
 
         guard let rect0 = barWindow.slotRect(at: 0),
               let rect1 = barWindow.slotRect(at: 1) else {
-            Issue.record("Slots não foram inicializados corretamente")
+            Issue.record("Slots were not initialized properly")
             return
         }
 
@@ -230,31 +230,31 @@ struct SnapGeometryTests {
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
         barWindow.present(on: screen)
-        // Força modo retrato para inspecionar os cartões verticais
+        // Force portrait mode to inspect vertical cards
         barWindow.isPortrait = true
         #expect(barWindow.totalSlotsCount == 10)
 
-        // Slot 2 = Cartão 2 (Topo 1/3) -> zone .topThird
-        // Slot 7 = Cartão 4 (Topo 1/3 do Base 2/3) -> zone .topThird
+        // Slot 2 = Card 2 (Top 1/3) -> zone .topThird
+        // Slot 7 = Card 4 (Top 1/3 of Bottom 2/3) -> zone .topThird
         guard let rectSlot2 = barWindow.slotRect(at: 2),
               let rectSlot7 = barWindow.slotRect(at: 7) else {
-            Issue.record("Slots 2 e 7 verticais devem existir")
+            Issue.record("Vertical slots 2 and 7 must exist")
             return
         }
 
-        // Paira sobre o Slot 7 (Topo 1/3 no cartão Assimétrico Invertido)
+        // Hover over Slot 7 (Top 1/3 in Inverted Asymmetric card)
         let pt7 = barWindow.convertPoint(toScreen: CGPoint(x: rectSlot7.midX, y: rectSlot7.midY))
         let zone7 = barWindow.checkHover(at: pt7)
         #expect(zone7 == .topThird)
-        // Apenas o slot 7 deve estar com highlight ativo!
+        // Only slot 7 should have active highlight!
         #expect(barWindow.currentlyHoveredSlotID == 7)
         #expect(barWindow.currentlyHoveredSlotID != 2)
 
-        // Agora move para o Slot 2 (Topo 1/3 no cartão de 3 terços)
+        // Now move to Slot 2 (Top 1/3 in 3-thirds card)
         let pt2 = barWindow.convertPoint(toScreen: CGPoint(x: rectSlot2.midX, y: rectSlot2.midY))
         let zone2 = barWindow.checkHover(at: pt2)
         #expect(zone2 == .topThird)
-        // Apenas o slot 2 deve estar com highlight ativo!
+        // Only slot 2 should have active highlight!
         #expect(barWindow.currentlyHoveredSlotID == 2)
         #expect(barWindow.currentlyHoveredSlotID != 7)
 
@@ -266,28 +266,28 @@ struct SnapGeometryTests {
         let barWindow = SnapLayoutBarWindow()
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
 
-        // 1. Inicialmente oculto
+        // 1. Initially hidden
         #expect(barWindow.presentationState == .hidden)
 
-        // 2. Apresenta como pílula achatada (Pill Mode)
+        // 2. Present as compact pill (Pill Mode)
         barWindow.presentPill(on: screen, animated: false)
         #expect(barWindow.presentationState == .pill)
         #expect(barWindow.frame.width == 220)
         #expect(barWindow.frame.height == 24)
 
-        // 3. Expande ao detectar hover
+        // 3. Expand upon detecting hover
         barWindow.expand(animated: false)
         #expect(barWindow.presentationState == .expanded)
         #expect(barWindow.frame.height == 94)
         #expect(barWindow.totalSlotsCount > 0)
 
-        // 4. Recolhe de volta para pílula quando o cursor se afasta
+        // 4. Collapse back to pill when cursor moves away
         barWindow.collapseToPill(animated: false)
         #expect(barWindow.presentationState == .pill)
         #expect(barWindow.frame.width == 220)
         #expect(barWindow.frame.height == 24)
 
-        // 5. Dispensa
+        // 5. Dismiss
         barWindow.dismiss(animated: false)
         #expect(barWindow.presentationState == .hidden)
     }
@@ -297,10 +297,10 @@ struct SnapGeometryTests {
         let divider = DividerHandleWindow()
         let view = divider.contentView
         #expect(view != nil)
-        // O divisor deve iniciar 100% invisível por padrão (alpha 0.0) para não poluir a tela
+        // Divider must start 100% invisible by default (alpha 0.0) to avoid screen clutter
         #expect(view?.alphaValue == 0.0)
 
-        // Simula a passagem do cursor (mouseEntered)
+        // Simulates cursor hover (mouseEntered)
         let dummyEvent = NSEvent.mouseEvent(
             with: .mouseMoved,
             location: .zero,
@@ -315,7 +315,7 @@ struct SnapGeometryTests {
         view?.mouseEntered(with: dummyEvent)
         #expect(view?.alphaValue == 1.0)
 
-        // Simula o cursor saindo da área da costura (mouseExited)
+        // Simulates cursor leaving the divider area (mouseExited)
         view?.mouseExited(with: dummyEvent)
         #expect(view?.alphaValue == 0.0)
     }
@@ -336,20 +336,20 @@ struct SnapGeometryTests {
         let dummy3 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 201)
         let dummy4 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 202)
 
-        // Emparelha no Monitor 1
+        // Pair on Monitor 1
         manager.pair(first: dummy1, second: dummy2, orientation: .vertical, on: screen1, ratio: 0.5)
         #expect(manager.state(for: screen1).pair != nil)
         #expect(manager.activePairs.count == 1)
 
-        // Emparelha no Monitor 2
+        // Pair on Monitor 2
         manager.pair(first: dummy3, second: dummy4, orientation: .horizontal, on: screen2, ratio: 0.5)
 
-        // Verifica que o Monitor 1 NÃO foi esquecido! Ambos continuam emparelhados simultaneamente.
+        // Verify Monitor 1 was NOT forgotten! Both remain paired simultaneously.
         #expect(manager.state(for: screen1).pair != nil)
         #expect(manager.state(for: screen2).pair != nil)
         #expect(manager.activePairs.count == 2)
 
-        // Limpa
+        // Clear
         manager.clearPairing()
         #expect(manager.activePairs.count == 0)
     }
@@ -357,9 +357,9 @@ struct SnapGeometryTests {
     @MainActor
     @Test func testAutoDetectAdjacentWindowsExecution() {
         let manager = PairedResizeManager.shared
-        // Executa a busca automática de janelas adjacentes no ambiente atual
+        // Run automatic search for adjacent windows in current environment
         let detected = manager.autoDetectAdjacentWindows()
-        // Deve executar sem falhas retornando a lista de pares encontrados
+        // Must execute without errors, returning list of detected pairs
         #expect(detected.count >= 0)
     }
 }

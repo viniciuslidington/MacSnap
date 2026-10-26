@@ -1,6 +1,6 @@
 import Cocoa
 
-/// Estado isolado de emparelhamento por monitor, mantendo histórico e divisor independente.
+/// Isolated pairing state per display, retaining history and an independent divider window.
 @MainActor
 public final class ScreenPairState {
     public let screenID: CGDirectDisplayID
@@ -27,13 +27,13 @@ public final class ScreenPairState {
     }
 }
 
-/// Gerencia janelas emparelhadas lado a lado (horizontal) ou empilhadas (vertical) e o divisor interativo central.
-/// Suporta múltiplos monitores simultâneos mantendo os pares ativos em cada tela de forma independente.
+/// Manages side-by-side (horizontal) or stacked (vertical) paired windows and the interactive central divider.
+/// Supports multiple simultaneous displays by maintaining active pairs on each screen independently.
 @MainActor
 public final class PairedResizeManager {
     public static let shared = PairedResizeManager()
 
-    /// Estados de emparelhamento indexados pelo ID numérico de cada monitor (displayID)
+    /// Pairing states indexed by numeric display ID (displayID)
     private var statesByScreen: [CGDirectDisplayID: ScreenPairState] = [:]
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
@@ -46,7 +46,7 @@ public final class PairedResizeManager {
         self.accessibilityService = accessibilityService
     }
 
-    /// Retorna ou inicializa o estado de emparelhamento dedicado para a tela especificada.
+    /// Returns or initializes the dedicated pairing state for the specified screen.
     public func state(for screen: NSScreen) -> ScreenPairState {
         let id = screen.displayID
         if let existing = statesByScreen[id] {
@@ -71,11 +71,11 @@ public final class PairedResizeManager {
         }
 
         state.dividerWindow.onDividerReleased = {
-            // Arraste finalizado; proporção salva no pair
+            // Drag finished; ratio saved in pair
         }
     }
 
-    /// Retorna o par ativo no monitor sob o cursor (ou o primeiro disponível para compatibilidade).
+    /// Returns the active pair on the screen under the cursor (or the first available for compatibility).
     public var activePair: PairedSplit? {
         if let currentScreen = screenService.screenContaining(point: NSEvent.mouseLocation) {
             return statesByScreen[currentScreen.displayID]?.pair
@@ -83,12 +83,12 @@ public final class PairedResizeManager {
         return statesByScreen.values.compactMap { $0.pair }.first
     }
 
-    /// Retorna todos os pares ativos mantidos através de todos os monitores conectados.
+    /// Returns all active pairs maintained across all connected displays.
     public var activePairs: [PairedSplit] {
         return statesByScreen.values.compactMap { $0.pair }
     }
 
-    /// Busca ativamente se já existe uma janela aberta no lado oposto para conectar o par imediatamente.
+    /// Actively searches whether an open window already exists on the opposite side to connect the pair immediately.
     public func findAdjacentWindow(atCocoaPoint point: CGPoint, excludingPid: pid_t) -> WindowElement? {
         let primaryHeight = screenService.primaryScreenHeight
         let axPoint = ScreenGeometry.cocoaPointToAX(cocoaPoint: point, primaryScreenHeight: primaryHeight)
@@ -101,8 +101,8 @@ public final class PairedResizeManager {
         return nil
     }
 
-    /// Calcula a área exata restante se já houver uma janela parceira posicionada no lado oposto,
-    /// evitando sobreposição mesmo quando a janela parceira tiver tamanho customizado ou altura mínima (ex: Xcode).
+    /// Calculates the exact remaining area if a partner window is already positioned on the opposite side,
+    /// avoiding overlap even when the partner window has a custom size or minimum height (e.g., Xcode).
     public func calculateFlushTargetRect(
         for zone: SnapZone,
         screen: NSScreen,
@@ -117,7 +117,7 @@ public final class PairedResizeManager {
         let excludePid = windowToExclude?.pid ?? 0
 
         switch zone {
-        // Encaixe na parte inferior: busca parceiro no topo
+        // Bottom snap: look for partner at the top
         case .bottomHalf, .bottomThird, .bottomTwoThirds:
             let samplePoint = CGPoint(x: x + (w * 0.5), y: y + (h * 0.75))
             if let topPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
@@ -130,7 +130,7 @@ public final class PairedResizeManager {
                 }
             }
 
-        // Encaixe na parte superior: busca parceiro na base
+        // Top snap: look for partner at the bottom
         case .topHalf, .topThird, .topTwoThirds:
             let samplePoint = CGPoint(x: x + (w * 0.5), y: y + (h * 0.25))
             if let bottomPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
@@ -144,7 +144,7 @@ public final class PairedResizeManager {
                 }
             }
 
-        // Encaixe na direita: busca parceiro na esquerda
+        // Right snap: look for partner on the left
         case .rightHalf, .rightOneThird, .rightTwoThirds:
             let samplePoint = CGPoint(x: x + (w * 0.25), y: y + (h * 0.5))
             if let leftPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
@@ -158,7 +158,7 @@ public final class PairedResizeManager {
                 }
             }
 
-        // Encaixe na esquerda: busca parceiro na direita
+        // Left snap: look for partner on the right
         case .leftHalf, .leftOneThird, .leftThird, .leftTwoThirds:
             let samplePoint = CGPoint(x: x + (w * 0.75), y: y + (h * 0.5))
             if let rightPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
@@ -179,12 +179,12 @@ public final class PairedResizeManager {
         return nil
     }
 
-    /// Registra uma nova janela que sofreu snap e ativa o divisor caso haja uma parceira oposta no monitor específico.
+    /// Registers a newly snapped window and activates the divider if an opposite partner is present on that display.
     public func registerSnap(window: WindowElement, zone: SnapZone, screen: NSScreen) {
         let visibleFrame = screen.visibleFrame
         let screenState = state(for: screen)
 
-        // 1. Tenta emparelhar dinamicamente usando a parceira detectada na intercessão desta tela
+        // 1. Attempt to dynamically pair using the detected partner at the intersection on this display
         if let flush = calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: window) {
             if flush.orientation == .vertical {
                 if zone == .topHalf || zone == .topThird || zone == .topTwoThirds {
@@ -210,7 +210,7 @@ public final class PairedResizeManager {
             return
         }
 
-        // 2. Fallback de histórico recente isolado para esta tela
+        // 2. Recent history fallback isolated to this display
         switch zone {
         case .leftHalf, .leftOneThird, .leftThird, .leftTwoThirds:
             screenState.recentLeftWindow = window
@@ -282,7 +282,7 @@ public final class PairedResizeManager {
         screenState.dividerWindow.update(for: pair)
     }
 
-    /// Força o emparelhamento explícito de duas janelas conhecidas na tela especificada.
+    /// Forces explicit pairing of two known windows on the specified screen.
     public func pair(
         first: WindowElement,
         second: WindowElement,
@@ -304,8 +304,8 @@ public final class PairedResizeManager {
         screenState.dividerWindow.update(for: pair)
     }
 
-    /// Escaneia automaticamente a tela especificada (ou todas as telas) procurando duas janelas abertas
-    /// que compartilham uma intercessão comum (lado a lado ou empilhadas) e conecta o divisor interativo entre elas.
+    /// Automatically scans the specified display (or all displays) searching for two open windows
+    /// that share a common boundary (side-by-side or stacked) and connects the interactive divider between them.
     @discardableResult
     public func autoDetectAdjacentWindows(on targetScreen: NSScreen? = nil) -> [PairedSplit] {
         let screensToScan = targetScreen != nil ? [targetScreen!] : screenService.screens
@@ -329,7 +329,7 @@ public final class PairedResizeManager {
                 height: screen.frame.height
             )
 
-            // Filtra as janelas da tela (Layer 0, visíveis, tamanho mínimo de 150x150, fora o MacSnap)
+            // Filter screen windows (Layer 0, visible, minimum size 150x150, excluding MacSnap)
             var candidates: [(pid: pid_t, name: String, frame: CGRect)] = []
             for info in windowInfoList {
                 let layer = info[kCGWindowLayer as String] as? Int ?? -1
@@ -356,7 +356,7 @@ public final class PairedResizeManager {
 
             guard candidates.count >= 2 else { continue }
 
-            // Procura o par com maior área ou adjacência evidente
+            // Search for the pair with greatest area or evident adjacency
             var foundPair: (first: WindowElement, second: WindowElement, orientation: SplitOrientation, ratio: CGFloat)?
 
             for i in 0..<candidates.count {
@@ -366,7 +366,7 @@ public final class PairedResizeManager {
                     let c2 = candidates[j]
                     guard c1.pid != c2.pid else { continue }
 
-                    // 1. Verificação de adjacência vertical (Empilhadas: Topo e Base)
+                    // 1. Vertical adjacency check (Stacked: Top and Bottom)
                     let overlapX = max(0, min(c1.frame.maxX, c2.frame.maxX) - max(c1.frame.minX, c2.frame.minX))
                     let minW = min(c1.frame.width, c2.frame.width)
 
@@ -375,7 +375,7 @@ public final class PairedResizeManager {
                         let gap2 = abs(c2.frame.maxY - c1.frame.minY)
 
                         if gap1 <= 32 {
-                            // c1 está no topo, c2 está na base
+                            // c1 is on top, c2 is on bottom
                             if let topElem = windowElement(for: c1.pid, cgFrame: c1.frame),
                                let bottomElem = windowElement(for: c2.pid, cgFrame: c2.frame) {
                                 let ratio = c1.frame.height / screen.visibleFrame.height
@@ -383,7 +383,7 @@ public final class PairedResizeManager {
                                 break
                             }
                         } else if gap2 <= 32 {
-                            // c2 está no topo, c1 está na base
+                            // c2 is on top, c1 is on bottom
                             if let topElem = windowElement(for: c2.pid, cgFrame: c2.frame),
                                let bottomElem = windowElement(for: c1.pid, cgFrame: c1.frame) {
                                 let ratio = c2.frame.height / screen.visibleFrame.height
@@ -393,7 +393,7 @@ public final class PairedResizeManager {
                         }
                     }
 
-                    // 2. Verificação de adjacência horizontal (Lado a Lado: Esquerda e Direita)
+                    // 2. Horizontal adjacency check (Side-by-side: Left and Right)
                     let overlapY = max(0, min(c1.frame.maxY, c2.frame.maxY) - max(c1.frame.minY, c2.frame.minY))
                     let minH = min(c1.frame.height, c2.frame.height)
 
@@ -402,7 +402,7 @@ public final class PairedResizeManager {
                         let gap2 = abs(c2.frame.maxX - c1.frame.minX)
 
                         if gap1 <= 32 {
-                            // c1 está na esquerda, c2 está na direita
+                            // c1 is on left, c2 is on right
                             if let leftElem = windowElement(for: c1.pid, cgFrame: c1.frame),
                                let rightElem = windowElement(for: c2.pid, cgFrame: c2.frame) {
                                 let ratio = c1.frame.width / screen.visibleFrame.width
@@ -410,7 +410,7 @@ public final class PairedResizeManager {
                                 break
                             }
                         } else if gap2 <= 32 {
-                            // c2 está na esquerda, c1 está na direita
+                            // c2 is on left, c1 is on right
                             if let leftElem = windowElement(for: c2.pid, cgFrame: c2.frame),
                                let rightElem = windowElement(for: c1.pid, cgFrame: c1.frame) {
                                 let ratio = c2.frame.width / screen.visibleFrame.width
@@ -440,7 +440,7 @@ public final class PairedResizeManager {
         return detectedPairs
     }
 
-    /// Localiza o objeto WindowElement correspondente ao PID e frame da janela.
+    /// Locates the WindowElement object corresponding to the PID and window frame.
     private func windowElement(for pid: pid_t, cgFrame: CGRect) -> WindowElement? {
         let appElement = AXUIElementCreateApplication(pid)
         var windowsValue: CFTypeRef?
@@ -464,7 +464,7 @@ public final class PairedResizeManager {
         return nil
     }
 
-    /// Remove a barra divisória e desfaz o vínculo de emparelhamento ativo (de uma tela específica ou de todas).
+    /// Removes the divider bar and disbands active pairing (for a specific display or all displays).
     public func clearPairing(for screen: NSScreen? = nil) {
         if let screen = screen {
             statesByScreen[screen.displayID]?.clear()

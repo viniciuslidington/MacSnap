@@ -2,7 +2,7 @@
 set -e
 
 # ==============================================================================
-# MacSnap - Script de Instalação e Inicialização Automática com o macOS
+# MacSnap - Installation and Launch at Login Script for macOS
 # ==============================================================================
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -14,66 +14,66 @@ LAUNCH_AGENT_DIR="$HOME/Library/LaunchAgents"
 LAUNCH_AGENT_PATH="$LAUNCH_AGENT_DIR/$PLIST_LABEL.plist"
 
 echo "=========================================================="
-echo "🚀 Instalando o MacSnap no macOS"
+echo "🚀 Installing MacSnap on macOS"
 echo "=========================================================="
 
-# 1. Compila a versão Release otimizada (Universal arm64 + x86_64 quando suportado)
-echo "📦 Compilando binário de produção (Release)..."
+# 1. Compile optimized Release binary (Universal arm64 + x86_64 when supported)
+echo "📦 Building production binary (Release)..."
 cd "$PROJECT_DIR"
 swift build -c release --arch arm64 --arch x86_64 2>/dev/null || swift build -c release
 
 RELEASE_BIN="$PROJECT_DIR/.build/out/Products/Release/MacSnap"
 if [ ! -f "$RELEASE_BIN" ]; then
-    # Fallback para o caminho padrão do Swift PM se diferente
+    # Fallback to default Swift PM build path if different
     RELEASE_BIN=$(find "$PROJECT_DIR/.build" -type f -name "MacSnap" -perm +111 | grep -i "release" | head -n 1)
 fi
 
 if [ ! -f "$RELEASE_BIN" ]; then
-    echo "❌ Erro: Binário compilado não foi encontrado."
+    echo "❌ Error: Compiled binary was not found."
     exit 1
 fi
 
-# 2. Cria a estrutura do pacote .app
-echo "📁 Montando o pacote $APP_NAME..."
+# 2. Create .app bundle structure
+echo "📁 Assembling $APP_NAME bundle..."
 TMP_APP="/tmp/$APP_NAME"
 rm -rf "$TMP_APP"
 mkdir -p "$TMP_APP/Contents/MacOS"
 mkdir -p "$TMP_APP/Contents/Resources"
 
-# Copia o binário
+# Copy binary
 cp "$RELEASE_BIN" "$TMP_APP/Contents/MacOS/MacSnap"
 chmod +x "$TMP_APP/Contents/MacOS/MacSnap"
 
-# Copia o Info.plist
+# Copy Info.plist
 cp "$PROJECT_DIR/Resources/Info.plist" "$TMP_APP/Contents/Info.plist"
 
-# Copia o ícone se existir
+# Copy icon if present
 if [ -f "$PROJECT_DIR/Resources/AppIcon.icns" ]; then
     cp "$PROJECT_DIR/Resources/AppIcon.icns" "$TMP_APP/Contents/Resources/AppIcon.icns"
 fi
 
-# 3. Assinatura do pacote (codesign)
-# Busca certificado de desenvolvimento Apple no chaveiro do usuário para fixar uma
-# Designated Requirement estável (evitando que o macOS invalide a permissão de Acessibilidade a cada compilação).
+# 3. Code signature (codesign)
+# Look for local Apple Development certificate in keychain for a stable
+# Designated Requirement (preventing macOS from resetting Accessibility permission on every rebuild).
 DEV_CERT=$(security find-identity -p codesigning -v | grep "Apple Development" | head -n 1 | awk -F '"' '{print $2}')
 if [ -n "$DEV_CERT" ]; then
-    echo "🔏 Assinando com certificado estável: $DEV_CERT..."
+    echo "🔏 Signing with stable developer certificate: $DEV_CERT..."
     codesign --force --deep --sign "$DEV_CERT" "$TMP_APP"
 else
-    echo "🔏 Aplicando assinatura ad-hoc (codesign)..."
+    echo "🔏 Applying ad-hoc codesign signature..."
     codesign --force --deep --sign - "$TMP_APP"
 fi
 
-# 4. Instala em /Applications
-echo "📂 Copiando para $DEST_DIR..."
-# Se já estiver rodando, encerra a versão anterior
+# 4. Install in /Applications
+echo "📂 Copying to $DEST_DIR..."
+# Terminate running instance if any
 pkill -x "MacSnap" || true
 rm -rf "$APP_DEST"
 cp -R "$TMP_APP" "$APP_DEST"
 rm -rf "$TMP_APP"
 
-# 5. Configura o LaunchAgent para Iniciar com o Mac
-echo "⚙️ Configurando inicialização automática no login do usuário..."
+# 5. Configure LaunchAgent for Launch at Login
+echo "⚙️ Configuring Launch at Login..."
 mkdir -p "$LAUNCH_AGENT_DIR"
 
 cat <<EOF > "$LAUNCH_AGENT_PATH"
@@ -101,16 +101,16 @@ cat <<EOF > "$LAUNCH_AGENT_PATH"
 </plist>
 EOF
 
-# Registra e ativa o LaunchAgent (que já inicia o app automaticamente)
+# Register and load LaunchAgent (which launches the app)
 launchctl unload "$LAUNCH_AGENT_PATH" 2>/dev/null || true
 launchctl load "$LAUNCH_AGENT_PATH"
 
 echo "=========================================================="
-echo "✅ MacSnap instalado com sucesso em: $APP_DEST"
-echo "✅ Inicialização automática configurada em: $LAUNCH_AGENT_PATH"
+echo "✅ MacSnap successfully installed in: $APP_DEST"
+echo "✅ Launch at Login configured in: $LAUNCH_AGENT_PATH"
 echo "=========================================================="
 echo ""
-echo "💡 Dica: O MacSnap opera na barra de menus superior."
-echo "Se for a primeira execução, certifique-se de conceder a permissão em:"
-echo "   👉 Ajustes do Sistema > Privacidade e Segurança > Acessibilidade"
+echo "💡 Tip: MacSnap operates from the macOS menu bar."
+echo "If this is your first run, ensure Accessibility permission is granted in:"
+echo "   👉 System Settings > Privacy & Security > Accessibility"
 echo ""

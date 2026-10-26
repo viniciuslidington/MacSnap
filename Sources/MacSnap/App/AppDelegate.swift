@@ -7,24 +7,24 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private let eventMonitor: EventMonitoringProtocol = GlobalEventMonitor.shared
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
-        print("[MacSnap] Iniciando aplicação...")
+        print("[MacSnap] Starting application...")
 
-        // Inicializa o menu da barra superior
+        // Initialize status bar menu
         menuBarController = MenuBarController()
 
-        // Verifica permissões de acessibilidade no início
+        // Check accessibility permissions on launch
         let hasPermission = accessibilityService.isAccessibilityGranted(promptIfNeeded: true)
         if !hasPermission {
-            print("[MacSnap] Permissão de acessibilidade pendente. Solicitação apresentada ao usuário.")
+            print("[MacSnap] Accessibility permission pending. Prompt displayed to user.")
         }
 
-        // Ativa o monitoramento global de arraste de janelas e bordas
+        // Start global window dragging and edge snapping monitor
         eventMonitor.startMonitoring()
 
-        // Auto-reconhecimento inicial de janelas adjacentes abertas em qualquer monitor
+        // Initial auto-detection of adjacent windows on all connected displays
         PairedResizeManager.shared.autoDetectAdjacentWindows()
 
-        // Observa ativação e alternância de janelas para auto-conectar janelas adjacentes
+        // Observe application switches to auto-connect adjacent windows
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
@@ -35,11 +35,11 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        print("[MacSnap] Pronto para gerenciar janelas.")
+        print("[MacSnap] Ready to manage windows.")
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
         eventMonitor.stopMonitoring()
-        print("[MacSnap] Encerrando aplicação.")
+        print("[MacSnap] Quitting application.")
     }
 }

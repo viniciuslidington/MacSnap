@@ -2,24 +2,24 @@ import Foundation
 import CoreGraphics
 import Cocoa
 
-/// Orientação da divisão entre as duas janelas emparelhadas.
+/// Orientation of the split between two paired windows.
 public enum SplitOrientation: Sendable {
-    case horizontal // Janelas lado a lado (Esquerda e Direita)
-    case vertical   // Janelas empilhadas (Topo e Base, essencial para monitores verticais)
+    case horizontal // Windows side by side (Left and Right)
+    case vertical   // Windows stacked (Top and Bottom, essential for portrait monitors)
 }
 
-/// Representa um par de janelas emparelhadas (estilo Windows Snap Assist).
-/// Suporta tanto divisões horizontais (Esquerda/Direita) quanto verticais (Topo/Base),
-/// com atração magnética em proporções comuns e prevenção dinâmica de sobreposição.
+/// Represents a pair of snapped windows (similar to Windows Snap Assist).
+/// Supports both horizontal splits (Left/Right) and vertical splits (Top/Bottom),
+/// with magnetic snapping at common ratios and dynamic overlap prevention.
 public final class PairedSplit: @unchecked Sendable {
-    public let firstWindow: WindowElement   // Janela da Esquerda ou do Topo
-    public let secondWindow: WindowElement  // Janela da Direita ou da Base
+    public let firstWindow: WindowElement   // Left or Top window
+    public let secondWindow: WindowElement  // Right or Bottom window
     public let orientation: SplitOrientation
     public var visibleFrame: CGRect
 
-    /// Proporção do espaço ocupado pela primeira janela (entre 0.15 e 0.85).
-    /// - Para horizontal: proporção da largura da janela esquerda.
-    /// - Para vertical: proporção da altura da janela do topo.
+    /// Ratio of the space occupied by the first window (between 0.15 and 0.85).
+    /// - For horizontal: width ratio of the left window.
+    /// - For vertical: height ratio of the top window.
     public var ratio: CGFloat {
         didSet {
             ratio = min(max(ratio, 0.15), 0.85)
@@ -40,7 +40,7 @@ public final class PairedSplit: @unchecked Sendable {
         self.ratio = min(max(ratio, 0.15), 0.85)
     }
 
-    // Compatibilidade com inicializador anterior (left/right)
+    // Compatibility with previous initializer (left/right)
     public convenience init(
         leftWindow: WindowElement,
         rightWindow: WindowElement,
@@ -61,7 +61,7 @@ public final class PairedSplit: @unchecked Sendable {
     public var topWindow: WindowElement { firstWindow }
     public var bottomWindow: WindowElement { secondWindow }
 
-    /// Calcula os retângulos em coordenadas Cocoa para a primeira e segunda janela.
+    /// Calculates the rectangles in Cocoa coordinates for the first and second window.
     public func calculateFrames() -> (first: CGRect, second: CGRect) {
         let x = visibleFrame.origin.x
         let y = visibleFrame.origin.y
@@ -79,16 +79,16 @@ public final class PairedSplit: @unchecked Sendable {
         case .vertical:
             let bottomHeight = (height * (1.0 - ratio)).rounded()
             let topHeight = height - bottomHeight
-            // No Cocoa, a janela da base começa em y, e a do topo começa em y + bottomHeight
+            // In Cocoa, bottom window starts at y, and top starts at y + bottomHeight
             let bottomRect = CGRect(x: x, y: y, width: width, height: bottomHeight)
             let topRect = CGRect(x: x, y: y + bottomHeight, width: width, height: topHeight)
             return (topRect, bottomRect)
         }
     }
 
-    /// Posição exata do divisor central baseada na borda real alcançada pela primeira janela:
-    /// - Se horizontal, retorna a coordenada X onde a janela da esquerda termina.
-    /// - Se vertical, retorna a coordenada Y onde a janela do topo começa (borda inferior dela).
+    /// Exact position of the central divider based on the real edge reached by the first window:
+    /// - If horizontal, returns the X coordinate where the left window ends.
+    /// - If vertical, returns the Y coordinate where the top window begins (its bottom edge).
     public var dividerPosition: CGFloat {
         let primaryHeight = NSScreen.screens.first?.frame.height ?? 1080.0
         switch orientation {
@@ -108,12 +108,12 @@ public final class PairedSplit: @unchecked Sendable {
     public var dividerX: CGFloat { dividerPosition }
     public var dividerY: CGFloat { dividerPosition }
 
-    /// Verifica se ambas as janelas do par continuam abertas e acessíveis no sistema.
+    /// Checks if both windows in the pair remain open and accessible in the system.
     public var isValid: Bool {
         return firstWindow.axFrame != nil && secondWindow.axFrame != nil
     }
 
-    /// Retângulo do divisor para posicionar a janela de manuseio.
+    /// Frame of the interactive divider handle window.
     public var dividerFrame: CGRect {
         let handleBreadth: CGFloat = 24.0
         switch orientation {
@@ -134,8 +134,8 @@ public final class PairedSplit: @unchecked Sendable {
         }
     }
 
-    /// Aplica as proporções atuais às duas janelas garantindo que NUNCA haja sobreposição,
-    /// mesmo quando um aplicativo (como o Xcode) possuir restrição de altura mínima.
+    /// Applies current split ratios to both windows ensuring NO overlap,
+    /// even when an app (such as Xcode) enforces minimum height constraints.
     public func applyCurrentSplit(primaryScreenHeight: CGFloat) {
         let (firstRect, secondRect) = calculateFrames()
         switch orientation {
@@ -158,7 +158,7 @@ public final class PairedSplit: @unchecked Sendable {
         case .vertical:
             firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
             if let actualTop = firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight) {
-                // actualTop.minY é a borda inferior real da janela superior (Xcode)
+                // actualTop.minY is the real bottom edge of the top window
                 let actualBottomHeight = max(actualTop.minY - visibleFrame.origin.y, 100)
                 let adjustedBottom = CGRect(
                     x: visibleFrame.origin.x,
@@ -173,7 +173,7 @@ public final class PairedSplit: @unchecked Sendable {
         }
     }
 
-    /// Atualiza a proporção com base no arraste do cursor com atração magnética suave.
+    /// Updates the split ratio based on cursor drag with gentle magnetic snapping.
     public func updateRatioFromCursor(cursorCoordinate: CGFloat, primaryScreenHeight: CGFloat) {
         var rawRatio: CGFloat
 
@@ -191,14 +191,14 @@ public final class PairedSplit: @unchecked Sendable {
         applyCurrentSplit(primaryScreenHeight: primaryScreenHeight)
     }
 
-    /// Mantém compatibilidade com chamadas horizontais anteriores.
+    /// Preserves compatibility with previous horizontal callers.
     public func updateRatioFromDividerX(_ currentX: CGFloat, primaryScreenHeight: CGFloat) {
         updateRatioFromCursor(cursorCoordinate: currentX, primaryScreenHeight: primaryScreenHeight)
     }
 
-    /// Atração magnética suave em 50/50 (0.5), 33/67 (0.333) e 67/33 (0.667).
+    /// Gentle magnetic snapping at 50/50 (0.5), 33/67 (0.333) and 67/33 (0.667).
     private func applyMagneticSnap(_ raw: CGFloat) -> CGFloat {
-        let magneticTolerance: CGFloat = 0.035 // 3.5% de alcance magnético
+        let magneticTolerance: CGFloat = 0.035 // 3.5% magnetic snap reach
 
         if abs(raw - 0.50) <= magneticTolerance {
             return 0.50

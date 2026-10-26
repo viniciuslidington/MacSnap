@@ -1,6 +1,6 @@
 # MacSnap 🪟⚡
 
-> Gerenciador nativo de janelas para macOS construído em **Swift puro**, trazendo a facilidade e os recursos de **Snap Layouts** e **divisão interativa** do Windows 11 para o ecossistema Mac com a estética visual **Apple Glass UI**.
+> Native macOS window manager built with **pure Swift**, bringing the convenience and power of **Windows 11 Snap Layouts** and **interactive paired split resizing** to the Mac ecosystem with a refined **Apple Glass UI** aesthetic.
 
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-blue?logo=apple&logoColor=white)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange?logo=swift&logoColor=white)](https://swift.org)
@@ -9,22 +9,22 @@
 
 ---
 
-## ⚡ Instalação Rápida via Linha de Comando
+## ⚡ Quick Command-Line Installation
 
-Para instalar o **MacSnap** no seu Mac em segundos, abra o **Terminal** e execute:
+To install **MacSnap** on your Mac in seconds, open **Terminal** and run:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/viniciuslidington/MacSnap/main/install.sh)"
 ```
 
-> **O que o comando faz:**
-> 1. Baixa o pacote universal pré-compilado de produção e instala em `/Applications/MacSnap.app`.
-> 2. Configura a inicialização automática silenciosa em segundo plano com o macOS via LaunchAgent.
-> 3. Inicia o MacSnap e abre o painel de Acessibilidade nos Ajustes do Sistema para habilitar a permissão.
+> **What this command does:**
+> 1. Downloads the pre-compiled universal production package and installs to `/Applications/MacSnap.app`.
+> 2. Configures silent Launch at Login in the background via LaunchAgent.
+> 3. Launches MacSnap and opens the Accessibility settings pane in System Settings to grant permissions.
 
-### Desinstalação
+### Uninstallation
 
-Caso queira desinstalar completamente o MacSnap e remover a inicialização automática a qualquer momento:
+To completely uninstall MacSnap and remove Launch at Login at any time:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/viniciuslidington/MacSnap/main/install.sh)" -- --uninstall
@@ -32,138 +32,138 @@ Caso queira desinstalar completamente o MacSnap e remover a inicialização auto
 
 ---
 
-## 🎯 Recursos Principais
+## 🎯 Key Features
 
-### 1. 🪟 Snap Bar no Topo (Windows 11 Style)
-- **Pílula Retrátil Apple Glass**: Ao segurar e arrastar uma aba ou janela, surge discretamente no topo da tela ativa uma pílula achatada de vidro translúcido com o ícone vetorial de divisão de tela.
-- **Rastreamento Multi-Monitor**: A barra acompanha dinamicamente o monitor onde o cursor do mouse está localizado, migrando fluidamente entre telas horizontais e verticais.
-- **Expansão sob Demanda**: Ao aproximar o cursor da pílula, ela se expande fluidamente revelando os templates de layout geométricos sem poluição de texto. Se o cursor se afastar, ela se recolhe de volta para a pílula.
-- **Templates para Monitores Horizontais (16:9 / Ultrawide):**
-  - **2 Colunas (50/50):** Metade Esquerda e Metade Direita.
-  - **3 Colunas (1/3 cada):** Esquerda, Centro e Direita.
-  - **Assimétrico (2/3 + 1/3):** Esquerda 2/3 e Direita 1/3.
-  - **Assimétrico Inverso (1/3 + 2/3):** Esquerda 1/3 e Direita 2/3.
-  - **4 Quadrantes (2x2):** Quatro cantos da tela.
-  - **Maximizar:** Preenchimento completo da tela visível.
-- **Templates para Monitores Verticais (Portrait):**
-  - **Metades Verticais:** Topo (1/2) e Base (1/2).
-  - **Terços Verticais:** Topo (1/3), Centro (1/3) e Base (1/3).
-  - **Dois Terços:** Topo (2/3) e Base (1/3).
-  - **Dois Terços Inverso:** Topo (1/3) e Base (2/3).
-  - **Maximizar Vertical:** Tela cheia vertical.
+### 1. 🪟 Top Snap Bar (Windows 11 Style)
+- **Collapsible Apple Glass Pill**: Dragging a window tab summons a subtle translucent glass pill at the top of the active display featuring a vector screen-split glyph.
+- **Dynamic Multi-Monitor Tracking**: Follows cursor location dynamically across displays, seamlessly adapting between horizontal (16:9 / Ultrawide) and vertical (Portrait) screens.
+- **On-Demand Hover Expansion**: Approaching the pill smoothly expands it into clean geometric layout templates without text clutter. Moving the cursor away collapses it back into the pill.
+- **Landscape Templates (16:9 / Ultrawide):**
+  - **2 Columns (50/50):** Left Half and Right Half.
+  - **3 Columns (1/3 each):** Left, Center, and Right.
+  - **Asymmetric (2/3 + 1/3):** Left 2/3 and Right 1/3.
+  - **Inverted Asymmetric (1/3 + 2/3):** Left 1/3 and Right 2/3.
+  - **4 Quarters (2x2):** Four screen quadrants.
+  - **Maximize:** Full fill of visible screen frame.
+- **Portrait Templates (Vertical Monitors):**
+  - **Vertical Halves:** Top (1/2) and Bottom (1/2).
+  - **Vertical Thirds:** Top (1/3), Center (1/3), and Bottom (1/3).
+  - **Two Thirds:** Top (2/3) and Bottom (1/3).
+  - **Inverted Two Thirds:** Top (1/3) and Bottom (2/3).
+  - **Vertical Maximize:** Full vertical fill.
 
-### 2. ⚡ Aero Snap / Ancoragem pelas Bordas da Tela
-- **Borda Esquerda / Direita:** Encaixa a janela em metade da tela (50/50).
-- **Topo da Tela:** Maximiza a janela respeitando a barra de menus e o Dock.
-- **Quatro Cantos:** Divide a tela em quadrantes de 25%.
-- **Bordas Laterais em Monitores Verticais:** Divide em terços (1/3) de acordo com a altura em que o mouse atinge a borda.
+### 2. ⚡ Aero Snap / Edge Snapping
+- **Left / Right Screen Edges:** Snaps window to half the screen (50/50).
+- **Top Screen Edge:** Maximizes window, respecting the Menu Bar and Dock.
+- **Four Screen Corners:** Divides screen into 25% quadrants.
+- **Side Edges on Portrait Displays:** Snaps into thirds (1/3) based on cursor height along the edge.
 
-### 3. 🎨 Design Apple Glass UI & Pré-Visualização Translúcida
-- Efeito *frosted glass* translúcido (`NSVisualEffectView` com material popover vibrante) com tom cinza claro, reflexos especulares lapidados e bordas luminosas.
-- Alta transparência calibrada para não bloquear a leitura do conteúdo subjacente.
-- Nível de exibição de camadas otimizado: o modal de layouts sempre se sobrepõe ao retângulo de prévia, garantindo visibilidade e referência contínuas.
+### 3. 🎨 Apple Glass UI & Translucent Preview
+- Translucent *frosted glass* effect (`NSVisualEffectView` with vibrant popover material), subtle specular highlights, and luminous bevel borders.
+- Calibrated transparency ensuring underlying text and windows remain readable.
+- Optimal layer ordering: the layout menu always stays in front of the preview overlay, providing continuous visual orientation.
 
-### 4. 🔗 Janelas Emparelhadas & Divisor Interativo Multi-Monitor (Snap Assist)
-- **Auto-Reconhecimento de Janelas Existentes**: Detecta automaticamente janelas que já estão posicionadas lado a lado ou empilhadas na mesma tela (mesmo que tenham sido posicionadas manualmente), conectando um divisor de redimensionamento na junção entre elas.
-- **Exibição Inteligente sob Demanda (*Hover-Only*)**: O divisor e o controle de ajuste permanecem 100% invisíveis durante o uso normal para não poluir a tela, surgindo com fade-in suave de vidro (*Apple Glass*) apenas quando o cursor se aproxima da borda entre as duas janelas.
-- **Suporte Multi-Monitor Persistente**: Cada monitor mantém seu estado de janelas emparelhadas de forma completamente independente. Ajustar janelas em um monitor horizontal não reseta o par do monitor vertical.
-- **Atração Magnética Suave:** Ao arrastar o divisor próximo a 50/50, 33/67 ou 67/33, o cursor é puxado suavemente para facilitar o travamento da proporção exata.
+### 4. 🔗 Paired Windows & Interactive Multi-Monitor Split (Snap Assist)
+- **Auto-Detection of Existing Windows**: Automatically identifies open windows placed side-by-side or stacked on the same display, attaching an interactive resize divider at their junction.
+- **On-Demand Hover-Only Visibility**: The divider handle remains 100% invisible during normal work, fading in smoothly (*Apple Glass*) only when the cursor hovers near the split seam.
+- **Persistent Multi-Monitor Support**: Each connected screen maintains its paired window state independently. Adjusting a split on a landscape monitor does not disturb pairing on a vertical monitor.
+- **Subtle Magnetic Snapping:** Dragging the divider near 50/50, 33/67, or 67/33 smoothly locks into the exact ratio.
 
-### 5. 🍏 Barra de Menus do macOS (`NSStatusItem`)
-- Ícone vetorizado nativo Retina no estilo de janelas emparelhadas.
-- Menu de contexto com atalhos rápidos para layouts em 1 clique, verificação de status da permissão de Acessibilidade e alternância de inicialização com o Mac.
-- Opera como utilitário de fundo leve (`LSUIElement` / `.accessory`), consumindo poucos megabytes de memória RAM e zero impacto de bateria.
+### 5. 🍏 macOS Menu Bar Utility (`NSStatusItem`)
+- Retina vector icon in paired split window style.
+- Context menu with 1-click snap shortcuts, Accessibility permission status indicator, and Launch at Login toggle.
+- Lightweight background utility (`LSUIElement` / `.accessory`), consuming minimal RAM and zero background battery impact.
 
 ---
 
-## 🏛 Arquitetura do Projeto
+## 🏛 Project Architecture
 
-Construído em conformidade com as diretrizes do **Swift 6 Concurrency**, **Clean Architecture** e **SOLID**:
+Built following **Swift 6 Concurrency**, **Clean Architecture**, and **SOLID** principles:
 
 ```text
 Sources/MacSnap/
 ├── App/
-│   ├── main.swift                       # Ponto de entrada (define modo acessório)
-│   └── AppDelegate.swift                # Ciclo de vida e orquestração dos serviços
+│   ├── main.swift                       # Entry point (sets accessory application mode)
+│   └── AppDelegate.swift                # App lifecycle and service orchestration
 │
 ├── Core/
 │   ├── Models/
-│   │   ├── SnapZone.swift               # Enums e cálculos geométricos das zonas de encaixe
-│   │   ├── ScreenGeometry.swift         # Conversão de coordenadas Cocoa <-> Accessibility API
-│   │   ├── WindowElement.swift          # Wrapper tipado sobre AXUIElement com anti-clamp sizing
-│   │   └── PairedSplit.swift            # Modelo matemático de janelas emparelhadas e proporção
+│   │   ├── SnapZone.swift               # Enums and geometric math for snap zones
+│   │   ├── ScreenGeometry.swift         # Cocoa <-> Accessibility API coordinate conversion
+│   │   ├── WindowElement.swift          # Type-safe wrapper over AXUIElement with anti-clamp sizing
+│   │   └── PairedSplit.swift            # Mathematical model for paired window splits and ratios
 │   └── Protocols/
-│       └── Protocols.swift              # Contratos e abstrações para injeção de dependência
+│       └── Protocols.swift              # Protocol contracts and abstractions for dependency injection
 │
 ├── Services/
 │   ├── Accessibility/
-│   │   └── AccessibilityService.swift   # Comunicação com Accessibility API (HIServices) com 5 níveis de fallback
+│   │   └── AccessibilityService.swift   # Accessibility API bridge (HIServices) with 5-level fallback
 │   ├── Screen/
-│   │   └── ScreenService.swift          # Descoberta de telas, orientação e coordenadas de monitores
+│   │   └── ScreenService.swift          # Screen discovery, orientation, and visible frames
 │   └── EventMonitoring/
-│       └── GlobalEventMonitor.swift     # Escuta de eventos globais de mouse via CGEventTap
+│       └── GlobalEventMonitor.swift     # Global mouse event tracking via CGEventTap
 │
 └── Features/
     ├── Snapping/
-    │   └── SnapEngine.swift             # Mecanismo central de ancoragem e ajuste de janelas
+    │   └── SnapEngine.swift             # Core snapping engine and window repositioning
     ├── Pairing/
-    │   └── PairedResizeManager.swift    # Gerenciador multi-monitor de janelas emparelhadas e divisores
+    │   └── PairedResizeManager.swift    # Multi-monitor paired window and divider manager
     └── UI/
-        ├── SnapLayoutBarWindow.swift    # Janela flutuante Apple Glass do menu de layouts (Pílula e Expandido)
-        ├── PreviewOverlayWindow.swift   # Janela translúcida de pré-visualização de encaixe
-        ├── DividerHandleWindow.swift    # Barra divisória interativa entre janelas
-        └── MenuBarController.swift      # Controlador do menu superior do sistema
+        ├── SnapLayoutBarWindow.swift    # Apple Glass floating layout bar (Pill and Expanded)
+        ├── PreviewOverlayWindow.swift   # Translucent snap preview overlay window
+        ├── DividerHandleWindow.swift    # Interactive split divider bar
+        └── MenuBarController.swift      # Menu bar status item and context menu controller
 ```
 
 ---
 
-## 🧪 Testes Unitários
+## 🧪 Unit Tests
 
-O projeto possui suíte de testes automatizados com o framework moderno de testes do Swift (`import Testing`):
+The project includes an automated test suite written with the Swift Testing framework (`import Testing`):
 
 ```bash
 swift test
 ```
 
-Cobre:
-- Cálculos geométricos de todas as `SnapZone` para resoluções horizontais, verticais e ultrawide.
-- Conversão bidirecional de coordenadas entre **Cocoa** (origem no canto inferior-esquerdo) e **Accessibility API** (origem no canto superior-esquerdo).
-- Transições de estado entre modo pílula, expansão por hover e recolhimento no menu de layouts.
-- Independência de destaque visual de slots para cartões com zonas compartilhadas.
-- Algoritmo de auto-detecção de janelas vizinhas e persistência de pares em múltiplos monitores simultâneos.
+Coverage includes:
+- Geometric calculations for all `SnapZone` targets across landscape, portrait, and ultrawide displays.
+- Bidirectional coordinate conversion between **Cocoa** (origin bottom-left) and **Accessibility API** (origin top-left).
+- State transitions between pill mode, hover expansion, and collapse in the layout bar.
+- Independent visual slot highlighting across cards with identical target zones.
+- Automatic window adjacency detection and multi-monitor persistence.
 
 ---
 
-## 🛠 Compilação a Partir do Código-Fonte
+## 🛠 Building from Source Code
 
-Caso queira clonar e compilar o projeto localmente:
+To clone and build locally:
 
-### Requisitos:
-- macOS 13.0 (Ventura) ou superior
-- Xcode 15+ ou Command Line Tools com suporte a Swift 6
+### Requirements:
+- macOS 13.0 (Ventura) or later
+- Xcode 15+ or Command Line Tools with Swift 6 support
 
 ```bash
-# 1. Clone o repositório
+# 1. Clone repository
 git clone https://github.com/viniciuslidington/MacSnap.git
 cd MacSnap
 
-# 2. Compile e instale localmente
+# 2. Build and install locally
 ./scripts/install.sh
 ```
 
 ---
 
-## 🔒 Permissões de Acessibilidade
+## 🔒 Accessibility Permissions
 
-O macOS exige permissão de **Acessibilidade** para que qualquer software possa ler dimensões e mover janelas de outros aplicativos:
+macOS requires **Accessibility** permission so that MacSnap can query dimensions and position windows of other applications:
 
-1. Ao abrir o MacSnap pela primeira vez, uma caixa de diálogo do sistema solicitará acesso.
-2. Você também pode habilitar a qualquer momento acessando:
-   **Ajustes do Sistema > Privacidade e Segurança > Acessibilidade**
-3. Ative a chave ao lado de **MacSnap**.
+1. When opening MacSnap for the first time, a system dialog will prompt for permission.
+2. You can also grant permission anytime in:
+   **System Settings > Privacy & Security > Accessibility**
+3. Enable the toggle next to **MacSnap**.
 
 ---
 
-## 📄 Licença
+## 📄 License
 
-Distribuído sob a licença MIT. Veja `LICENSE` para mais informações.
+Distributed under the MIT License. See `LICENSE` for details.

@@ -1,43 +1,43 @@
 import Foundation
 import CoreGraphics
 
-/// Representa as possíveis zonas de ancoragem (snap) na tela,
-/// incluindo suporte avançado para layouts simétricos e assimétricos (2/3 e 1/3).
+/// Represents the possible snap target zones on a display,
+/// including advanced support for symmetric and asymmetric (2/3 and 1/3) layouts.
 public enum SnapZone: Sendable, Equatable {
-    // Layouts Padrão
+    // Standard Layouts
     case leftHalf
     case rightHalf
     case topHalf
     case bottomHalf
     case maximize
 
-    // Quadrantes
+    // Quadrants
     case topLeftQuarter
     case topRightQuarter
     case bottomLeftQuarter
     case bottomRightQuarter
 
-    // Colunas Horizontais (Especial para Telas 16:9 / Ultrawide)
+    // Horizontal Columns (16:9 / Ultrawide)
     case leftThird
     case centerThird
     case rightThird
 
-    // Layouts Horizontais Assimétricos (2/3 e 1/3 e inverso)
-    case leftTwoThirds    // Esquerda 2/3
-    case rightOneThird    // Direita 1/3 (parceira de leftTwoThirds)
-    case leftOneThird     // Esquerda 1/3 (mesmo que leftThird)
-    case rightTwoThirds   // Direita 2/3 (parceira de leftOneThird)
+    // Asymmetric Horizontal Layouts (2/3 and 1/3 splits)
+    case leftTwoThirds    // Left 2/3
+    case rightOneThird    // Right 1/3 (paired with leftTwoThirds)
+    case leftOneThird     // Left 1/3 (same as leftThird)
+    case rightTwoThirds   // Right 2/3 (paired with leftOneThird)
 
-    // Partições Verticais (Especial para Monitores Verticais / Portrait)
-    case topThird         // Topo 1/3
-    case middleThird      // Centro 1/3
-    case bottomThird      // Base 1/3
-    case topTwoThirds     // Topo 2/3 (parceira de bottomThird)
-    case bottomTwoThirds  // Base 2/3 (parceira de topThird - inverso)
+    // Vertical Partitions (Portrait Displays)
+    case topThird         // Top 1/3
+    case middleThird      // Middle 1/3
+    case bottomThird      // Bottom 1/3
+    case topTwoThirds     // Top 2/3 (paired with bottomThird)
+    case bottomTwoThirds  // Bottom 2/3 (paired with topThird - inverse)
 
-    /// Calcula o retângulo de destino (em coordenadas da tela Cocoa) para a zona indicada.
-    /// - Parameter visibleFrame: O frame visível da tela (excluindo Dock e Menu bar).
-    /// - Returns: O CGRect resultante para onde a janela deve ser redimensionada.
+    /// Calculates the target rectangle (in Cocoa screen coordinates) for the zone.
+    /// - Parameter visibleFrame: The visible screen frame (excluding Dock and Menu bar).
+    /// - Returns: The resulting CGRect where the window should be positioned.
     public func targetRect(for visibleFrame: CGRect) -> CGRect {
         let x = visibleFrame.origin.x
         let y = visibleFrame.origin.y
@@ -68,7 +68,7 @@ public enum SnapZone: Sendable, Equatable {
         case .maximize:
             return visibleFrame
 
-        // Quadrantes
+        // Quadrants
         case .topLeftQuarter:
             return CGRect(x: x, y: y + halfHeight, width: halfWidth, height: halfHeight)
 
@@ -81,7 +81,7 @@ public enum SnapZone: Sendable, Equatable {
         case .bottomRightQuarter:
             return CGRect(x: x + halfWidth, y: y, width: halfWidth, height: halfHeight)
 
-        // Colunas e Terços Horizontais (16:9 / Ultrawide)
+        // Horizontal Columns and Thirds (16:9 / Ultrawide)
         case .leftThird, .leftOneThird:
             return CGRect(x: x, y: y, width: thirdWidth, height: height)
 
@@ -91,14 +91,14 @@ public enum SnapZone: Sendable, Equatable {
         case .rightThird, .rightOneThird:
             return CGRect(x: x + twoThirdsWidth, y: y, width: thirdWidth, height: height)
 
-        // Assimétricos Horizontais (2/3 e 1/3)
+        // Asymmetric Horizontal Splits (2/3 and 1/3)
         case .leftTwoThirds:
             return CGRect(x: x, y: y, width: twoThirdsWidth, height: height)
 
         case .rightTwoThirds:
             return CGRect(x: x + thirdWidth, y: y, width: twoThirdsWidth, height: height)
 
-        // Partições Verticais (Monitores Verticais)
+        // Vertical Partitions (Portrait Displays)
         case .topThird:
             return CGRect(x: x, y: y + (thirdHeight * 2.0), width: width, height: thirdHeight)
 

@@ -3,8 +3,8 @@ import ApplicationServices
 import CoreGraphics
 import Cocoa
 
-/// Encapsula uma janela do macOS obtida via Accessibility API (`AXUIElement`).
-/// Fornece métodos seguros e tipados para consultar e alterar tamanho e posição.
+/// Encapsulates a macOS window retrieved via the Accessibility API (`AXUIElement`).
+/// Provides safe, strongly typed methods to query and modify size and position.
 public final class WindowElement: @unchecked Sendable, Identifiable {
     public let rawElement: AXUIElement
     public let pid: pid_t
@@ -14,7 +14,7 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
         self.pid = pid
     }
 
-    /// Título da janela (ou nil se inacessível).
+    /// Window title (or nil if inaccessible).
     public var title: String? {
         var value: CFTypeRef?
         let result = AXUIElementCopyAttributeValue(rawElement, kAXTitleAttribute as CFString, &value)
@@ -22,7 +22,7 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
         return titleStr
     }
 
-    /// Obtém o retângulo da janela no sistema de coordenadas da Accessibility API.
+    /// Returns the window frame in Accessibility API coordinates.
     public var axFrame: CGRect? {
         var posValue: CFTypeRef?
         var sizeValue: CFTypeRef?
@@ -42,16 +42,16 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
         return CGRect(origin: point, size: size)
     }
 
-    /// Obtém o frame da janela convertido para coordenadas Cocoa.
+    /// Returns the window frame converted to Cocoa coordinates.
     public func cocoaFrame(primaryScreenHeight: CGFloat) -> CGRect? {
         guard let axFrame = self.axFrame else { return nil }
         return ScreenGeometry.axToCocoa(axRect: axFrame, primaryScreenHeight: primaryScreenHeight)
     }
 
-    /// Aplica nova posição e tamanho em coordenadas de Accessibility.
+    /// Sets new position and size in Accessibility coordinates.
     /// - Parameters:
-    ///   - newAXFrame: O CGRect em coordenadas AX.
-    /// - Returns: Bool indicando se a alteração foi aceita pela janela.
+    ///   - newAXFrame: The target CGRect in AX coordinates.
+    /// - Returns: Bool indicating whether the update was accepted.
     @discardableResult
     public func setAXFrame(_ newAXFrame: CGRect) -> Bool {
         var point = newAXFrame.origin
@@ -62,32 +62,28 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
             return false
         }
 
-        // Multi-passo para garantir que o WindowServer não faça clamp:
-        // No macOS, a ordem entre posição e tamanho é crucial:
-        // Se aplicarmos tamanho primeiro enquanto a janela estiver em outra posição (ex: centro/canto da tela),
-        // o WindowServer limita (clamp) o tamanho à borda visível da tela antes que a janela seja movida,
-        // fazendo a janela ficar menor que a tela ("faltando um pedaço").
-        // Aplicando posição -> tamanho -> posição -> tamanho garantimos que tanto janelas em expansão
-        // quanto janelas em redução atinjam exatamente o frame alvo sem truncamento.
+        // Multi-pass anti-clamping:
+        // On macOS, the ordering between position and size is critical:
+        // If size is set while the window is still at an old position, the WindowServer
+        // clamps the size against the current screen boundary before moving, causing truncated windows.
+        // Applying position -> size -> position -> size guarantees both expanding and shrinking
+        // windows reach the exact target frame without truncation.
 
-        // Passada 1: Move para a nova posição primeiro para desobstruir o espaço de expansão
+        // Pass 1: Move to target position first to clear expansion headroom
         let posRes1 = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
         let sizeRes1 = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
 
         if posRes1 == .apiDisabled || sizeRes1 == .apiDisabled {
-            print("[MacSnap] ❌ ERRO DE ACESSIBILIDADE: kAXErrorAPIDisabled ao tentar alterar a janela PID \(pid).")
-            print("[MacSnap] 💡 Vá em Ajustes do Sistema > Privacidade e Segurança > Acessibilidade e habilite o MacSnap.")
+            print("[MacSnap] ❌ ACCESSIBILITY ERROR: kAXErrorAPIDisabled when resizing PID \(pid).")
+            print("[MacSnap] 💡 Please enable MacSnap in System Settings > Privacy & Security > Accessibility.")
             return false
         }
 
-        // Passada 2: Aplica posição e tamanho novamente.
-        // Se a janela estava encolhendo, a posição inicial pode ter sido clamped até o tamanho encolher;
-        // agora que o tamanho foi reduzido, a posição atinge o alvo exato.
-        // Se a janela estava crescendo, a posição inicial abriu o espaço e agora o tamanho atinge o alvo exato.
+        // Pass 2: Reapply position and size to settle any clamped intermediate states
         _ = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
         _ = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
 
-        // Passada 3 (Confirmação): se a janela divergir por mais de 4px, reforça a posição e tamanho finais.
+        // Pass 3 (Verification): If actual frame deviates by > 4px, enforce final target
         if let current = self.axFrame {
             let dw = abs(current.width - newAXFrame.width)
             let dh = abs(current.height - newAXFrame.height)
@@ -103,14 +99,14 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
         return true
     }
 
-    /// Aplica nova posição e tamanho usando coordenadas Cocoa (convertendo internamente).
+    /// Sets new position and size using Cocoa coordinates (internally converted to AX).
     @discardableResult
     public func setCocoaFrame(_ cocoaRect: CGRect, primaryScreenHeight: CGFloat) -> Bool {
         let axFrame = ScreenGeometry.cocoaToAX(cocoaRect: cocoaRect, primaryScreenHeight: primaryScreenHeight)
         return setAXFrame(axFrame)
     }
 
-    /// Verifica se a janela permite redimensionamento.
+    /// Checks if the window supports resizing.
     public var isResizable: Bool {
         var isSettable: DarwinBoolean = false
         let result = AXUIElementIsAttributeSettable(rawElement, kAXSizeAttribute as CFString, &isSettable)

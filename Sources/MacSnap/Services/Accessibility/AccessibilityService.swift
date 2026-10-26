@@ -3,17 +3,17 @@ import ApplicationServices
 import CoreGraphics
 import Cocoa
 
-/// Implementação robusta do serviço de comunicação com a Accessibility API da Apple,
-/// com suporte a fallback multinível para captura da janela alvo mesmo durante arraste
-/// ou quando painéis/menus do próprio MacSnap estão em primeiro plano.
+/// Robust implementation of communication with the Apple Accessibility API,
+/// with multi-level fallback support for capturing target windows even during active drags
+/// or when MacSnap panels/menus are frontmost.
 public final class AccessibilityService: AccessibilityServiceProtocol, @unchecked Sendable {
     public static let shared = AccessibilityService()
 
     private var lastActiveApp: NSRunningApplication?
 
     public init() {
-        // Observa ativações de aplicativos para sempre lembrar a janela/app frontal do usuário
-        // mesmo quando ele clica no menu da barra de status do MacSnap
+        // Observes application activation to track the user's frontmost application
+        // even when interacting with the MacSnap status bar menu
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
@@ -33,11 +33,11 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
         return AXIsProcessTrustedWithOptions(options)
     }
 
-    /// Obtém a janela em primeiro plano com 5 níveis de tolerância a falhas.
+    /// Obtains the frontmost window using 5 levels of fault tolerance.
     public func getFocusedWindow() -> WindowElement? {
         let myPid = ProcessInfo.processInfo.processIdentifier
 
-        // 1. Tenta obter o app frontal via Accessibility API
+        // 1. Attempt to get frontmost application via Accessibility API
         let systemWideElement = AXUIElementCreateSystemWide()
         var focusedAppValue: CFTypeRef?
         var targetAppElement: AXUIElement?
@@ -49,21 +49,21 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
             var pid: pid_t = 0
             AXUIElementGetPid(app, &pid)
 
-            // Se o app em foco NÃO for o próprio MacSnap, usamos ele
+            // If the focused application is not MacSnap itself, use it
             if pid != myPid && pid != 0 {
                 targetAppElement = app
                 targetPid = pid
             }
         }
 
-        // 2. Se o app em foco for o próprio MacSnap (ex: menu da status bar aberto),
-        // recorre ao último aplicativo regular ativo registrado
+        // 2. If the focused app is MacSnap (e.g. status bar menu is open),
+        // fallback to the last registered active regular application
         if targetAppElement == nil, let lastApp = lastActiveApp, !lastApp.isTerminated, lastApp.processIdentifier != myPid {
             targetPid = lastApp.processIdentifier
             targetAppElement = AXUIElementCreateApplication(targetPid)
         }
 
-        // 3. Consulta o NSWorkspace pelo aplicativo ativo real do usuário
+        // 3. Query NSWorkspace for the user's active frontmost application
         if targetAppElement == nil {
             let candidateApp = NSWorkspace.shared.runningApplications.first(where: {
                 $0.isActive && $0.processIdentifier != myPid && $0.activationPolicy == .regular
@@ -75,18 +75,18 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
             }
         }
 
-        // 4. Se encontrou o aplicativo alvo, busca sua janela ativa usando estratégia em cascata:
+        // 4. If target application was found, query its active window cascading:
         //    a) kAXFocusedWindowAttribute
         //    b) kAXMainWindowAttribute
-        //    c) kAXWindowsAttribute (primeira janela válida)
+        //    c) kAXWindowsAttribute (first valid window)
         if let appElement = targetAppElement {
             if let window = extractWindow(from: appElement, pid: targetPid) {
                 return window
             }
         }
 
-        // 5. Consulta a lista global de janelas no WindowServer (CGWindowList) para localizar a
-        // janela visível de nível 0 (normal) mais ao topo na tela que não pertença ao MacSnap
+        // 5. Query the global WindowServer window list (CGWindowList) for the topmost
+        // level 0 (normal) window on screen that does not belong to MacSnap
         let windowList = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
         for win in windowList {
             let layer = win[kCGWindowLayer as String] as? Int ?? -1
@@ -103,7 +103,7 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
             }
         }
 
-        // 6. Último fallback: tenta encontrar a janela sob a posição atual do cursor
+        // 6. Final fallback: attempt to find the window directly under cursor position
         let mouseLocation = NSEvent.mouseLocation
         if let primaryScreen = NSScreen.screens.first {
             let axPoint = ScreenGeometry.cocoaPointToAX(cocoaPoint: mouseLocation, primaryScreenHeight: primaryScreen.frame.height)
@@ -115,23 +115,23 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
         return nil
     }
 
-    /// Extrai uma janela válida de uma aplicação tentando FocusedWindow -> MainWindow -> Windows[0].
+    /// Extracts a valid window from an application trying FocusedWindow -> MainWindow -> Windows[0].
     private func extractWindow(from appElement: AXUIElement, pid: pid_t) -> WindowElement? {
-        // Tentativa A: Focused Window
+        // Attempt A: Focused Window
         var focusedWindowValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &focusedWindowValue) == .success,
            let winVal = focusedWindowValue {
             return WindowElement(element: winVal as! AXUIElement, pid: pid)
         }
 
-        // Tentativa B: Main Window (muito comum durante arraste da barra de título)
+        // Attempt B: Main Window (common during title bar dragging)
         var mainWindowValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &mainWindowValue) == .success,
            let winVal = mainWindowValue {
             return WindowElement(element: winVal as! AXUIElement, pid: pid)
         }
 
-        // Tentativa C: Lista de janelas abertas da aplicação
+        // Attempt C: Application window list
         var windowsValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsValue) == .success,
            let winArray = windowsValue as? [AXUIElement], let firstWin = winArray.first {
@@ -156,8 +156,8 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
             return nil
         }
 
-        // Se o elemento capturado não for uma janela (pode ser botão, texto, etc.),
-        // subimos na hierarquia até achar a janela pai (kAXWindowRole)
+        // If the element is not a window (could be button, text, etc.),
+        // traverse up the hierarchy until reaching the parent window (kAXWindowRole)
         var current: AXUIElement = element
         while true {
             var roleValue: CFTypeRef?
