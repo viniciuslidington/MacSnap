@@ -24,13 +24,15 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         // Initial auto-detection of adjacent windows on all connected displays
         PairedResizeManager.shared.autoDetectAdjacentWindows()
 
-        // Observe application switches to auto-connect adjacent windows
+        // Observe application switches to auto-connect adjacent windows and immediately suppress occluded dividers
         NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
-        ) { _ in
+        ) { notif in
+            guard let app = notif.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             Task { @MainActor in
+                PairedResizeManager.shared.handleApplicationActivated(app)
                 PairedResizeManager.shared.autoDetectAdjacentWindows()
             }
         }

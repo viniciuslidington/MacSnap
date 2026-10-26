@@ -328,7 +328,17 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
                 let fromModal = self.isZoneFromLayoutBar
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
                     self?.snapEngine.snapWindow(window, to: zone, on: screen, forceExactSize: fromModal)
+                    // Settlement pass: verify and ensure pairing for any adjacent windows (including same application)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                        PairedResizeManager.shared.autoDetectAdjacentWindows(on: screen)
+                    }
                 }
+            }
+        } else if self.isHoldingWindowOrTab {
+            // Window was dragged and dropped: check if it was placed adjacent to an existing window (including same app)
+            let currentScreen = self.screenService.screenContaining(point: NSEvent.mouseLocation)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+                PairedResizeManager.shared.autoDetectAdjacentWindows(on: currentScreen)
             }
         }
 

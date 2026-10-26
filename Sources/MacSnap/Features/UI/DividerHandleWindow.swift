@@ -9,6 +9,7 @@ public final class DividerHandleWindow: NSPanel {
     public var onDividerReleased: (() -> Void)?
     public var validatePair: (() -> Bool)?
     public var onInvalidPairDetected: (() -> Void)?
+    public var isOccludedAtPoint: ((CGPoint) -> Bool)?
 
     private let customView: DividerCustomView
 
@@ -41,6 +42,11 @@ public final class DividerHandleWindow: NSPanel {
         customView.alphaValue = 0.0
         customView.isDragging = false
         super.orderOut(sender)
+    }
+
+    /// Immediately suppresses visibility and interactions without destroying pairing state.
+    public func hideDividerImmediately() {
+        customView.hideImmediately()
     }
 
     /// Updates the divider based on a `PairedSplit` instance.
@@ -107,7 +113,14 @@ final class DividerCustomView: NSView {
         self.addTrackingArea(trackingArea)
     }
 
-    // Allows the first click to be immediately captured even when another app is focused
+    func hideImmediately() {
+        isHovered = false
+        alphaValue = 0.0
+        needsDisplay = true
+        window?.invalidateCursorRects(for: self)
+    }
+
+    // Allows the first click to be immediately captured only when unoccluded
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         return true
     }
@@ -116,7 +129,20 @@ final class DividerCustomView: NSView {
         return true
     }
 
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let screenPoint = window?.convertPoint(toScreen: point) ?? NSEvent.mouseLocation
+        if let isOccluded = dividerWindow?.isOccludedAtPoint, isOccluded(screenPoint) {
+            return nil
+        }
+        return super.hitTest(point)
+    }
+
     override func resetCursorRects() {
+        let mouseLocation = NSEvent.mouseLocation
+        if let isOccluded = dividerWindow?.isOccludedAtPoint, isOccluded(mouseLocation) {
+            self.discardCursorRects()
+            return
+        }
         let cursor: NSCursor = (orientation == .horizontal) ? .resizeLeftRight : .resizeUpDown
         self.addCursorRect(bounds, cursor: cursor)
     }
@@ -130,6 +156,14 @@ final class DividerCustomView: NSView {
             }
         }
 
+        let mouseLocation = NSEvent.mouseLocation
+        if let isOccluded = dividerWindow?.isOccludedAtPoint, isOccluded(mouseLocation) {
+            self.alphaValue = 0.0
+            isHovered = false
+            needsDisplay = true
+            return
+        }
+
         isHovered = true
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.15
@@ -137,6 +171,34 @@ final class DividerCustomView: NSView {
             self.animator().alphaValue = 1.0
         }
         needsDisplay = true
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        let mouseLocation = NSEvent.mouseLocation
+        let isOccluded = dividerWindow?.isOccludedAtPoint?(mouseLocation) ?? false
+
+        if isOccluded {
+            if isHovered || alphaValue > 0.01 {
+                isHovered = false
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.15
+                    context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                    self.animator().alphaValue = 0.0
+                }
+                window?.invalidateCursorRects(for: self)
+            }
+        } else {
+            if !isHovered && !isDragging {
+                isHovered = true
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.15
+                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                    self.animator().alphaValue = 1.0
+                }
+                window?.invalidateCursorRects(for: self)
+            }
+        }
     }
 
     override func mouseExited(with event: NSEvent) {

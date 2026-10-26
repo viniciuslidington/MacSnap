@@ -661,4 +661,61 @@ struct SnapGeometryTests {
         #expect(leftTarget.origin.x == visibleFrame.origin.x)
         #expect(rightTarget.origin.x == visibleFrame.origin.x + (visibleFrame.width / 2.0))
     }
+
+    @MainActor
+    @Test func testSameApplicationTwoWindowsPairing() {
+        let manager = PairedResizeManager.shared
+        manager.clearPairing()
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
+
+        // Two distinct windows from the same app (same PID, e.g. Chrome window 1 and Chrome window 2)
+        let chromePid: pid_t = 2855
+        let dummyChrome1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: chromePid)
+        let dummyChrome2 = WindowElement(element: AXUIElementCreateApplication(chromePid), pid: chromePid)
+
+        manager.pair(first: dummyChrome1, second: dummyChrome2, orientation: .horizontal, on: screen, ratio: 0.5)
+        let pair = manager.state(for: screen).pair
+
+        #expect(pair != nil)
+        #expect(pair?.firstWindow.pid == pair?.secondWindow.pid)
+        #expect(!CFEqual(pair!.firstWindow.rawElement, pair!.secondWindow.rawElement))
+    }
+
+    @MainActor
+    @Test func testSameApplicationAdjacentSearchFallback() {
+        let manager = PairedResizeManager.shared
+        guard let screen = NSScreen.screens.first else { return }
+
+        // Simulate an excluded window from an app with PID 9999
+        let dummyApp = AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier)
+        let currentWindow = WindowElement(element: dummyApp, pid: ProcessInfo.processInfo.processIdentifier)
+
+        // findAdjacentWindow should safely reject self and not crash
+        let partner = manager.findAdjacentWindow(
+            atCocoaPoint: CGPoint(x: screen.visibleFrame.midX, y: screen.visibleFrame.midY),
+            excludingWindow: currentWindow
+        )
+
+        // When finding candidate at empty point or self, it should safely return nil
+        #expect(partner == nil || !CFEqual(partner!.rawElement, currentWindow.rawElement))
+    }
+
+    @MainActor
+    @Test func testDividerOcclusionAndSuppression() {
+        let manager = PairedResizeManager.shared
+        guard let screen = NSScreen.screens.first else { return }
+
+        let dummy1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 9991)
+        let dummy2 = WindowElement(element: AXUIElementCreateApplication(9992), pid: 9992)
+        let pair = PairedSplit(firstWindow: dummy1, secondWindow: dummy2, visibleFrame: screen.visibleFrame, ratio: 0.5)
+
+        // Point outside the screen bounds or empty should return false (unoccluded)
+        let occluded = manager.isPairOccluded(atCocoaPoint: CGPoint(x: -99999, y: -99999), for: pair)
+        #expect(!occluded)
+
+        // Hiding divider immediately should set alphaValue to 0.0
+        let state = manager.state(for: screen)
+        state.dividerWindow.hideDividerImmediately()
+        #expect(state.dividerWindow.contentView?.alphaValue == 0.0)
+    }
 }

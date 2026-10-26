@@ -167,8 +167,63 @@ public final class PairedResizeManager {
             return self.isPairValidAndAdjacent(pair)
         }
 
+        state.dividerWindow.isOccludedAtPoint = { [weak self, weak state] point in
+            guard let self = self, let state = state, let pair = state.pair else { return false }
+            return self.isPairOccluded(atCocoaPoint: point, for: pair)
+        }
+
         state.dividerWindow.onInvalidPairDetected = { [weak state] in
             state?.clear()
+        }
+    }
+
+    /// Determines whether the seam at the given Cocoa screen point is occluded by an unrelated frontmost window.
+    public func isPairOccluded(atCocoaPoint point: CGPoint, for pair: PairedSplit) -> Bool {
+        let primaryHeight = screenService.primaryScreenHeight
+        let cgY = primaryHeight - point.y
+        let cgPoint = CGPoint(x: point.x, y: cgY)
+
+        let opt: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let infoList = CGWindowListCopyWindowInfo(opt, kCGNullWindowID) as? [[String: Any]] else {
+            return false
+        }
+
+        let myPid = ProcessInfo.processInfo.processIdentifier
+        let pairPids: Set<pid_t> = [pair.firstWindow.pid, pair.secondWindow.pid]
+
+        for w in infoList {
+            let layer = w[kCGWindowLayer as String] as? Int ?? -1
+            guard layer == 0 else { continue }
+
+            let pid = w[kCGWindowOwnerPID as String] as? pid_t ?? 0
+            guard pid != myPid && pid != 0 else { continue }
+
+            let boundsDict = w[kCGWindowBounds as String] as? [String: Any] ?? [:]
+            let bounds = CGRect(dictionaryRepresentation: boundsDict as CFDictionary) ?? .zero
+
+            if bounds.insetBy(dx: -4, dy: -4).contains(cgPoint) {
+                // The frontmost window at this location:
+                // If it belongs to one of the paired applications, it is unoccluded!
+                if pairPids.contains(pid) {
+                    return false
+                } else {
+                    // An unrelated window is in front of the pair at this location!
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    /// Handles application activation to immediately suppress dividers when an unrelated app becomes active.
+    public func handleApplicationActivated(_ app: NSRunningApplication) {
+        for (_, state) in statesByScreen {
+            if let pair = state.pair {
+                if app.processIdentifier != pair.firstWindow.pid && app.processIdentifier != pair.secondWindow.pid {
+                    state.dividerWindow.hideDividerImmediately()
+                }
+            }
         }
     }
 
@@ -176,6 +231,7 @@ public final class PairedResizeManager {
     /// and physically adjacent along their shared seam on screen.
     public func isPairValidAndAdjacent(_ pair: PairedSplit) -> Bool {
         guard pair.isValid else { return false }
+        guard !CFEqual(pair.firstWindow.rawElement, pair.secondWindow.rawElement) else { return false }
         let primaryHeight = screenService.primaryScreenHeight
         guard let f1 = pair.firstWindow.cocoaFrame(primaryScreenHeight: primaryHeight),
               let f2 = pair.secondWindow.cocoaFrame(primaryScreenHeight: primaryHeight) else {
@@ -246,15 +302,44 @@ public final class PairedResizeManager {
     }
 
     /// Actively searches whether an open window already exists on the opposite side to connect the pair immediately.
-    public func findAdjacentWindow(atCocoaPoint point: CGPoint, excludingPid: pid_t) -> WindowElement? {
+    public func findAdjacentWindow(
+        atCocoaPoint point: CGPoint,
+        excludingWindow: WindowElement? = nil
+    ) -> WindowElement? {
         let primaryHeight = screenService.primaryScreenHeight
         let axPoint = ScreenGeometry.cocoaPointToAX(cocoaPoint: point, primaryScreenHeight: primaryHeight)
         let myPid = ProcessInfo.processInfo.processIdentifier
 
-        if let candidate = accessibilityService.getWindowUnderPoint(axPoint),
-           candidate.pid != excludingPid && candidate.pid != myPid {
-            return candidate
+        if let candidate = accessibilityService.getWindowUnderPoint(axPoint) {
+            guard candidate.pid != myPid else { return nil }
+            if let excluded = excludingWindow {
+                if !CFEqual(candidate.rawElement, excluded.rawElement) {
+                    return candidate
+                }
+            } else {
+                return candidate
+            }
         }
+
+        // Secondary fallback for same-app windows:
+        // If systemWide hit-testing returned the excluded window or hit an overlay,
+        // inspect other windows of the same application containing the sample point.
+        if let excluded = excludingWindow {
+            let appElement = AXUIElementCreateApplication(excluded.pid)
+            var windowsValue: CFTypeRef?
+            if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsValue) == .success,
+               let winArray = windowsValue as? [AXUIElement] {
+                for win in winArray {
+                    guard !CFEqual(win, excluded.rawElement) else { continue }
+                    let otherElem = WindowElement(element: win, pid: excluded.pid)
+                    if let frame = otherElem.cocoaFrame(primaryScreenHeight: primaryHeight),
+                       frame.contains(point) {
+                        return otherElem
+                    }
+                }
+            }
+        }
+
         return nil
     }
 
@@ -271,7 +356,6 @@ public final class PairedResizeManager {
         let x = visibleFrame.origin.x
         let y = visibleFrame.origin.y
         let primaryHeight = screenService.primaryScreenHeight
-        let excludePid = windowToExclude?.pid ?? 0
         let defaultTarget = zone.targetRect(for: visibleFrame)
 
         switch zone {
@@ -279,7 +363,7 @@ public final class PairedResizeManager {
         case .bottomHalf, .bottomThird, .bottomTwoThirds:
             let sampleY = min(defaultTarget.maxY + 30.0, y + h - 20.0)
             let samplePoint = CGPoint(x: defaultTarget.midX, y: sampleY)
-            if let topPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
+            if let topPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingWindow: windowToExclude),
                let topFrame = topPartner.cocoaFrame(primaryScreenHeight: primaryHeight) {
                 // Partner must be anchored to the top screen boundary
                 guard abs(topFrame.maxY - (y + h)) <= 40 else { break }
@@ -297,7 +381,7 @@ public final class PairedResizeManager {
         case .topHalf, .topThird, .topTwoThirds:
             let sampleY = max(defaultTarget.minY - 30.0, y + 20.0)
             let samplePoint = CGPoint(x: defaultTarget.midX, y: sampleY)
-            if let bottomPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
+            if let bottomPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingWindow: windowToExclude),
                let bottomFrame = bottomPartner.cocoaFrame(primaryScreenHeight: primaryHeight) {
                 // Partner must be anchored to the bottom screen boundary
                 guard abs(bottomFrame.minY - y) <= 40 else { break }
@@ -316,7 +400,7 @@ public final class PairedResizeManager {
         case .rightHalf, .rightOneThird, .rightThird, .rightTwoThirds:
             let sampleX = max(defaultTarget.minX - 30.0, x + 20.0)
             let samplePoint = CGPoint(x: sampleX, y: defaultTarget.midY)
-            if let leftPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
+            if let leftPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingWindow: windowToExclude),
                let leftFrame = leftPartner.cocoaFrame(primaryScreenHeight: primaryHeight) {
                 // Partner must be anchored to the left screen boundary
                 guard abs(leftFrame.minX - x) <= 40 else { break }
@@ -335,7 +419,7 @@ public final class PairedResizeManager {
         case .leftHalf, .leftOneThird, .leftThird, .leftTwoThirds:
             let sampleX = min(defaultTarget.maxX + 30.0, x + w - 20.0)
             let samplePoint = CGPoint(x: sampleX, y: defaultTarget.midY)
-            if let rightPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingPid: excludePid),
+            if let rightPartner = findAdjacentWindow(atCocoaPoint: samplePoint, excludingWindow: windowToExclude),
                let rightFrame = rightPartner.cocoaFrame(primaryScreenHeight: primaryHeight) {
                 // Partner must be anchored to the right screen boundary
                 guard abs(rightFrame.maxX - (x + w)) <= 40 else { break }
@@ -353,14 +437,14 @@ public final class PairedResizeManager {
         // Center third snap: dock flush between left and right neighbors if they exist
         case .centerThird:
             let leftSample = CGPoint(x: max(defaultTarget.minX - 30.0, x + 20.0), y: defaultTarget.midY)
-            let leftNeighbor = findAdjacentWindow(atCocoaPoint: leftSample, excludingPid: excludePid)
+            let leftNeighbor = findAdjacentWindow(atCocoaPoint: leftSample, excludingWindow: windowToExclude)
             var leftEdge = defaultTarget.minX
             if let neighbor = leftNeighbor, let frame = neighbor.cocoaFrame(primaryScreenHeight: primaryHeight), abs(frame.minX - x) <= 40 {
                 leftEdge = frame.maxX
             }
 
             let rightSample = CGPoint(x: min(defaultTarget.maxX + 30.0, x + w - 20.0), y: defaultTarget.midY)
-            let rightNeighbor = findAdjacentWindow(atCocoaPoint: rightSample, excludingPid: excludePid)
+            let rightNeighbor = findAdjacentWindow(atCocoaPoint: rightSample, excludingWindow: windowToExclude)
             var rightEdge = defaultTarget.maxX
             if let neighbor = rightNeighbor, let frame = neighbor.cocoaFrame(primaryScreenHeight: primaryHeight), abs(frame.maxX - (x + w)) <= 40 {
                 rightEdge = frame.minX
@@ -459,7 +543,7 @@ public final class PairedResizeManager {
         visibleFrame: CGRect,
         in screenState: ScreenPairState
     ) {
-        guard left.rawElement != right.rawElement else { return }
+        guard !CFEqual(left.rawElement, right.rawElement) else { return }
         let primaryHeight = screenService.primaryScreenHeight
         guard let leftFrame = left.cocoaFrame(primaryScreenHeight: primaryHeight),
               let rightFrame = right.cocoaFrame(primaryScreenHeight: primaryHeight) else {
@@ -497,7 +581,7 @@ public final class PairedResizeManager {
         visibleFrame: CGRect,
         in screenState: ScreenPairState
     ) {
-        guard top.rawElement != bottom.rawElement else { return }
+        guard !CFEqual(top.rawElement, bottom.rawElement) else { return }
         let primaryHeight = screenService.primaryScreenHeight
         guard let topFrame = top.cocoaFrame(primaryScreenHeight: primaryHeight),
               let bottomFrame = bottom.cocoaFrame(primaryScreenHeight: primaryHeight) else {
@@ -566,16 +650,10 @@ public final class PairedResizeManager {
 
         for screen in screensToScan {
             let screenState = state(for: screen)
-            let cgScreenY = primaryHeight - (screen.frame.origin.y + screen.frame.height)
-            let cgScreenRect = CGRect(
-                x: screen.frame.origin.x,
-                y: cgScreenY,
-                width: screen.frame.width,
-                height: screen.frame.height
-            )
 
             // Filter screen windows (Layer 0, visible, minimum size 150x150, excluding MacSnap)
-            var candidates: [(pid: pid_t, name: String, frame: CGRect)] = []
+            // Stored in Cocoa bottom-left coordinates for consistent geometry calculations across all monitors
+            var candidates: [(windowID: CGWindowID, pid: pid_t, name: String, frame: CGRect)] = []
             for info in windowInfoList {
                 let layer = info[kCGWindowLayer as String] as? Int ?? -1
                 guard layer == 0 else { continue }
@@ -583,6 +661,7 @@ public final class PairedResizeManager {
                 let pid = info[kCGWindowOwnerPID as String] as? pid_t ?? 0
                 guard pid != myPid && pid != 0 else { continue }
 
+                let windowID = info[kCGWindowNumber as String] as? CGWindowID ?? 0
                 let name = info[kCGWindowOwnerName as String] as? String ?? ""
 
                 if let boundsDict = info[kCGWindowBounds as String] as? [String: Any],
@@ -590,11 +669,12 @@ public final class PairedResizeManager {
                    let y = boundsDict["Y"] as? Double,
                    let w = boundsDict["Width"] as? Double,
                    let h = boundsDict["Height"] as? Double {
-                    let frame = CGRect(x: x, y: y, width: w, height: h)
-                    let center = CGPoint(x: frame.midX, y: frame.midY)
+                    let cocoaY = primaryHeight - y - h
+                    let cocoaFrame = CGRect(x: x, y: cocoaY, width: w, height: h)
+                    let center = CGPoint(x: cocoaFrame.midX, y: cocoaFrame.midY)
 
-                    if cgScreenRect.contains(center) && w >= 150 && h >= 150 {
-                        candidates.append((pid: pid, name: name, frame: frame))
+                    if screen.frame.contains(center) && w >= 150 && h >= 150 {
+                        candidates.append((windowID: windowID, pid: pid, name: name, frame: cocoaFrame))
                     }
                 }
             }
@@ -612,23 +692,25 @@ public final class PairedResizeManager {
                 for j in (i + 1)..<candidates.count {
                     let c1 = candidates[i]
                     let c2 = candidates[j]
-                    guard c1.pid != c2.pid else { continue }
+                    guard c1.windowID != c2.windowID else { continue }
 
                     // 1. Vertical adjacency check (Stacked: Top and Bottom)
                     let overlapX = max(0, min(c1.frame.maxX, c2.frame.maxX) - max(c1.frame.minX, c2.frame.minX))
                     let minW = min(c1.frame.width, c2.frame.width)
 
-                    if overlapX / minW >= 0.65 {
-                        let gap1 = abs(c1.frame.maxY - c2.frame.minY)
-                        let gap2 = abs(c2.frame.maxY - c1.frame.minY)
+                    if overlapX / minW >= 0.50 {
+                        // In Cocoa coordinates, Top window has higher Y than Bottom window
+                        let gap1 = abs(c1.frame.minY - c2.frame.maxY)
+                        let gap2 = abs(c2.frame.minY - c1.frame.maxY)
 
                         if gap1 <= 32 {
                             // c1 is on top, c2 is on bottom
-                            let topTouches = abs(c1.frame.minY - cgScreenRect.minY) <= 40
-                            let bottomTouches = abs(c2.frame.maxY - cgScreenRect.maxY) <= 40
+                            let topTouches = abs(c1.frame.maxY - screen.visibleFrame.maxY) <= 50
+                            let bottomTouches = abs(c2.frame.minY - screen.visibleFrame.origin.y) <= 50
                             if topTouches && bottomTouches {
-                                if let topElem = windowElement(for: c1.pid, cgFrame: c1.frame),
-                                   let bottomElem = windowElement(for: c2.pid, cgFrame: c2.frame) {
+                                if let topElem = windowElement(for: c1.pid, cocoaFrame: c1.frame),
+                                   let bottomElem = windowElement(for: c2.pid, cocoaFrame: c2.frame),
+                                   !CFEqual(topElem.rawElement, bottomElem.rawElement) {
                                     let ratio = c1.frame.height / screen.visibleFrame.height
                                     foundPair = (topElem, bottomElem, .vertical, ratio)
                                     break
@@ -636,11 +718,12 @@ public final class PairedResizeManager {
                             }
                         } else if gap2 <= 32 {
                             // c2 is on top, c1 is on bottom
-                            let topTouches = abs(c2.frame.minY - cgScreenRect.minY) <= 40
-                            let bottomTouches = abs(c1.frame.maxY - cgScreenRect.maxY) <= 40
+                            let topTouches = abs(c2.frame.maxY - screen.visibleFrame.maxY) <= 50
+                            let bottomTouches = abs(c1.frame.minY - screen.visibleFrame.origin.y) <= 50
                             if topTouches && bottomTouches {
-                                if let topElem = windowElement(for: c2.pid, cgFrame: c2.frame),
-                                   let bottomElem = windowElement(for: c1.pid, cgFrame: c1.frame) {
+                                if let topElem = windowElement(for: c2.pid, cocoaFrame: c2.frame),
+                                   let bottomElem = windowElement(for: c1.pid, cocoaFrame: c1.frame),
+                                   !CFEqual(topElem.rawElement, bottomElem.rawElement) {
                                     let ratio = c2.frame.height / screen.visibleFrame.height
                                     foundPair = (topElem, bottomElem, .vertical, ratio)
                                     break
@@ -653,17 +736,18 @@ public final class PairedResizeManager {
                     let overlapY = max(0, min(c1.frame.maxY, c2.frame.maxY) - max(c1.frame.minY, c2.frame.minY))
                     let minH = min(c1.frame.height, c2.frame.height)
 
-                    if overlapY / minH >= 0.65 {
+                    if overlapY / minH >= 0.50 {
                         let gap1 = abs(c1.frame.maxX - c2.frame.minX)
                         let gap2 = abs(c2.frame.maxX - c1.frame.minX)
 
                         if gap1 <= 32 {
                             // c1 is on left, c2 is on right
-                            let leftTouches = abs(c1.frame.minX - screen.frame.origin.x) <= 40
-                            let rightTouches = abs(c2.frame.maxX - (screen.frame.origin.x + screen.frame.width)) <= 40
+                            let leftTouches = abs(c1.frame.minX - screen.visibleFrame.origin.x) <= 50
+                            let rightTouches = abs(c2.frame.maxX - screen.visibleFrame.maxX) <= 50
                             if leftTouches && rightTouches {
-                                if let leftElem = windowElement(for: c1.pid, cgFrame: c1.frame),
-                                   let rightElem = windowElement(for: c2.pid, cgFrame: c2.frame) {
+                                if let leftElem = windowElement(for: c1.pid, cocoaFrame: c1.frame),
+                                   let rightElem = windowElement(for: c2.pid, cocoaFrame: c2.frame),
+                                   !CFEqual(leftElem.rawElement, rightElem.rawElement) {
                                     let ratio = c1.frame.width / screen.visibleFrame.width
                                     foundPair = (leftElem, rightElem, .horizontal, ratio)
                                     break
@@ -671,11 +755,12 @@ public final class PairedResizeManager {
                             }
                         } else if gap2 <= 32 {
                             // c2 is on left, c1 is on right
-                            let leftTouches = abs(c2.frame.minX - screen.frame.origin.x) <= 40
-                            let rightTouches = abs(c1.frame.maxX - (screen.frame.origin.x + screen.frame.width)) <= 40
+                            let leftTouches = abs(c2.frame.minX - screen.visibleFrame.origin.x) <= 50
+                            let rightTouches = abs(c1.frame.maxX - screen.visibleFrame.maxX) <= 50
                             if leftTouches && rightTouches {
-                                if let leftElem = windowElement(for: c2.pid, cgFrame: c2.frame),
-                                   let rightElem = windowElement(for: c1.pid, cgFrame: c1.frame) {
+                                if let leftElem = windowElement(for: c2.pid, cocoaFrame: c2.frame),
+                                   let rightElem = windowElement(for: c1.pid, cocoaFrame: c1.frame),
+                                   !CFEqual(leftElem.rawElement, rightElem.rawElement) {
                                     let ratio = c2.frame.width / screen.visibleFrame.width
                                     foundPair = (leftElem, rightElem, .horizontal, ratio)
                                     break
@@ -706,24 +791,32 @@ public final class PairedResizeManager {
         return detectedPairs
     }
 
-    /// Locates the WindowElement object corresponding to the PID and window frame.
-    private func windowElement(for pid: pid_t, cgFrame: CGRect) -> WindowElement? {
+    /// Locates the WindowElement object corresponding to the PID and Cocoa window frame.
+    private func windowElement(for pid: pid_t, cocoaFrame: CGRect) -> WindowElement? {
         let appElement = AXUIElementCreateApplication(pid)
         var windowsValue: CFTypeRef?
+        let primaryHeight = screenService.primaryScreenHeight
 
         if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsValue) == .success,
            let winArray = windowsValue as? [AXUIElement] {
+            var bestMatch: WindowElement?
+            var smallestDistance: CGFloat = .greatestFiniteMagnitude
+
             for win in winArray {
                 let elem = WindowElement(element: win, pid: pid)
-                if let axFrame = elem.axFrame {
-                    if abs(axFrame.origin.x - cgFrame.origin.x) < 40 &&
-                       abs(axFrame.origin.y - cgFrame.origin.y) < 40 {
-                        return elem
+                if let elemFrame = elem.cocoaFrame(primaryScreenHeight: primaryHeight) {
+                    let dist = abs(elemFrame.origin.x - cocoaFrame.origin.x) +
+                               abs(elemFrame.origin.y - cocoaFrame.origin.y) +
+                               abs(elemFrame.width - cocoaFrame.width) +
+                               abs(elemFrame.height - cocoaFrame.height)
+                    if dist < smallestDistance {
+                        smallestDistance = dist
+                        bestMatch = elem
                     }
                 }
             }
-            if let first = winArray.first {
-                return WindowElement(element: first, pid: pid)
+            if let match = bestMatch, smallestDistance < 60 {
+                return match
             }
         }
 
