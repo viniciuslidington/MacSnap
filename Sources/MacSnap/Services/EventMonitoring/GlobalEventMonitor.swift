@@ -18,6 +18,41 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private var isDragGestureIgnored: Bool = false
     private var isZoneFromLayoutBar: Bool = false
 
+    private static let masterEnabledKey = "MacSnap.isMasterEnabled"
+    private static let topSnapBarEnabledKey = "MacSnap.isTopSnapBarEnabled"
+    private static let edgeSnapEnabledKey = "MacSnap.isEdgeSnapEnabled"
+
+    /// Master switch controlling whether MacSnap is globally active or paused.
+    public var isMasterEnabled: Bool = (UserDefaults.standard.object(forKey: masterEnabledKey) as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(isMasterEnabled, forKey: Self.masterEnabledKey)
+            if !isMasterEnabled {
+                previewOverlay.dismiss()
+                snapLayoutBar.dismiss(animated: false)
+                PairedResizeManager.shared.clearPairing()
+            } else {
+                PairedResizeManager.shared.autoDetectAdjacentWindows()
+            }
+        }
+    }
+
+    /// Controls whether the Top Snap Layout Bar pill/modal appears when dragging windows.
+    public var isTopSnapBarEnabled: Bool = (UserDefaults.standard.object(forKey: topSnapBarEnabledKey) as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(isTopSnapBarEnabled, forKey: Self.topSnapBarEnabledKey)
+            if !isTopSnapBarEnabled {
+                snapLayoutBar.dismiss(animated: false)
+            }
+        }
+    }
+
+    /// Controls whether dragging a window to screen edges and corners triggers snapping.
+    public var isEdgeSnapEnabled: Bool = (UserDefaults.standard.object(forKey: edgeSnapEnabledKey) as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(isEdgeSnapEnabled, forKey: Self.edgeSnapEnabledKey)
+        }
+    }
+
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
     private let previewOverlay: PreviewOverlayWindow
@@ -95,6 +130,16 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     }
 
     private func handleEvent(type: CGEventType, event: CGEvent) {
+        guard isMasterEnabled else {
+            if snapLayoutBar.presentationState != .hidden {
+                snapLayoutBar.dismiss(animated: false)
+            }
+            if previewOverlay.isVisible {
+                previewOverlay.dismiss()
+            }
+            return
+        }
+
         let mouseLocation = NSEvent.mouseLocation
 
         // If user is currently dragging an interactive resize divider, completely suppress
@@ -200,7 +245,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
         // When dragging a window, immediately present the collapsed Apple Glass pill
         // at the top of the monitor where the cursor currently is, tracking display switches
-        if isHoldingWindowOrTab {
+        if isHoldingWindowOrTab && isTopSnapBarEnabled {
             if snapLayoutBar.presentationState == .hidden {
                 snapLayoutBar.presentPill(on: screen)
             } else if snapLayoutBar.currentScreen != screen {
@@ -230,25 +275,27 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         var isFromLayoutBar = false
 
         // 1. Interaction with SnapLayoutBar (Pill or Expanded)
-        if snapLayoutBar.presentationState == .pill {
-            // Expand fluidly when cursor approaches the pill
-            _ = snapLayoutBar.checkHover(at: point)
-        } else if snapLayoutBar.presentationState == .expanded {
-            let flyoutHitArea = snapLayoutBar.frame.insetBy(dx: -25, dy: -25)
-            if flyoutHitArea.contains(point) {
-                // Cursor hovering over layout cards: select matching slot
-                detectedZone = snapLayoutBar.checkHover(at: point)
-                if detectedZone != nil {
-                    isFromLayoutBar = true
+        if isTopSnapBarEnabled {
+            if snapLayoutBar.presentationState == .pill {
+                // Expand fluidly when cursor approaches the pill
+                _ = snapLayoutBar.checkHover(at: point)
+            } else if snapLayoutBar.presentationState == .expanded {
+                let flyoutHitArea = snapLayoutBar.frame.insetBy(dx: -25, dy: -25)
+                if flyoutHitArea.contains(point) {
+                    // Cursor hovering over layout cards: select matching slot
+                    detectedZone = snapLayoutBar.checkHover(at: point)
+                    if detectedZone != nil {
+                        isFromLayoutBar = true
+                    }
+                } else {
+                    // Cursor moved away from expanded flyout: collapse smoothly back to pill
+                    snapLayoutBar.collapseToPill()
                 }
-            } else {
-                // Cursor moved away from expanded flyout: collapse smoothly back to pill
-                snapLayoutBar.collapseToPill()
             }
         }
 
         // 2. Screen edge snapping when no layout bar slot is hovered
-        if detectedZone == nil {
+        if detectedZone == nil && isEdgeSnapEnabled {
             if isPortrait {
                 if isBottom {
                     // Standard bottom edge: 50/50 bottom half

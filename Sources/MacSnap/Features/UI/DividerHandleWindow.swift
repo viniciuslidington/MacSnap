@@ -255,10 +255,17 @@ final class DividerCustomView: NSView {
 
         let isDark = (effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
 
-        // 1. Translucent glass divider line along the window intersection
-        let activeLineColor = isDark
-            ? NSColor(white: 1.0, alpha: 0.75)
-            : NSColor(white: 0.25, alpha: 0.65)
+        // 1. Translucent glass divider line along the window intersection (matching modal glass style)
+        let activeLineColor: NSColor
+        if isDark {
+            activeLineColor = isDragging
+                ? NSColor(white: 1.0, alpha: 0.28)
+                : NSColor(white: 1.0, alpha: 0.16)
+        } else {
+            activeLineColor = isDragging
+                ? NSColor(white: 0.0, alpha: 0.22)
+                : NSColor(white: 0.0, alpha: 0.12)
+        }
 
         // Inset so the divider line stops before the window corner radiuses curve away
         let cornerInset: CGFloat = 20.0
@@ -270,7 +277,7 @@ final class DividerCustomView: NSView {
             let endY = max(cornerInset, bounds.height - cornerInset)
             linePath.move(to: CGPoint(x: lineX, y: startY))
             linePath.line(to: CGPoint(x: lineX, y: endY))
-            linePath.lineWidth = 1.5
+            linePath.lineWidth = 1.0
             linePath.lineCapStyle = .round
             activeLineColor.setStroke()
             linePath.stroke()
@@ -281,48 +288,92 @@ final class DividerCustomView: NSView {
             let endX = max(cornerInset, bounds.width - cornerInset)
             linePath.move(to: CGPoint(x: startX, y: lineY))
             linePath.line(to: CGPoint(x: endX, y: lineY))
-            linePath.lineWidth = 1.5
+            linePath.lineWidth = 1.0
             linePath.lineCapStyle = .round
             activeLineColor.setStroke()
             linePath.stroke()
         }
 
-        // 2. Central Apple Glass pill handle
+        // 2. Central Apple Glass pill handle matching the modal's glass design and transparency
         let pillRect: NSRect
+        let pillW: CGFloat = 7.0
+        let pillH: CGFloat = 54.0
+        let cornerRadius: CGFloat = 3.5
+
         if orientation == .horizontal {
-            let pillWidth: CGFloat = 6.0
-            let pillHeight: CGFloat = 56.0
             pillRect = NSRect(
-                x: (bounds.width - pillWidth) / 2.0,
-                y: (bounds.height - pillHeight) / 2.0,
-                width: pillWidth,
-                height: pillHeight
+                x: (bounds.width - pillW) / 2.0,
+                y: (bounds.height - pillH) / 2.0,
+                width: pillW,
+                height: pillH
             )
         } else {
-            let pillWidth: CGFloat = 56.0
-            let pillHeight: CGFloat = 6.0
             pillRect = NSRect(
-                x: (bounds.width - pillWidth) / 2.0,
-                y: (bounds.height - pillHeight) / 2.0,
-                width: pillWidth,
-                height: pillHeight
+                x: (bounds.width - pillH) / 2.0,
+                y: (bounds.height - pillW) / 2.0,
+                width: pillH,
+                height: pillW
             )
         }
 
-        let path = NSBezierPath(roundedRect: pillRect, xRadius: 3.0, yRadius: 3.0)
+        NSGraphicsContext.saveGraphicsState()
+
+        // Soft ambient glass shadow
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(isDark ? 0.35 : 0.15)
+        shadow.shadowOffset = NSSize(width: 0, height: -1.0)
+        shadow.shadowBlurRadius = 4.0
+        shadow.set()
+
+        let path = NSBezierPath(roundedRect: pillRect, xRadius: cornerRadius, yRadius: cornerRadius)
+
+        // Glass background tint (matching the modal's Apple Glass palette)
         let pillFillColor: NSColor
-        if isDragging {
-            pillFillColor = isDark ? NSColor(white: 1.0, alpha: 0.95) : NSColor(white: 0.15, alpha: 0.95)
+        if isDark {
+            pillFillColor = isDragging
+                ? NSColor(white: 0.18, alpha: 0.62)
+                : NSColor(white: 0.14, alpha: 0.42)
         } else {
-            pillFillColor = isDark ? NSColor(white: 1.0, alpha: 0.85) : NSColor(white: 0.25, alpha: 0.85)
+            pillFillColor = isDragging
+                ? NSColor(white: 1.0, alpha: 0.72)
+                : NSColor(white: 1.0, alpha: 0.50)
         }
         pillFillColor.setFill()
         path.fill()
 
-        // Subtle glass stroke on pill handle
-        let pillStrokeColor = isDark ? NSColor(white: 1.0, alpha: 0.40) : NSColor(white: 0.0, alpha: 0.20)
+        NSGraphicsContext.restoreGraphicsState()
+
+        // Outer glass rim border
+        let pillStrokeColor: NSColor
+        if isDark {
+            pillStrokeColor = isDragging
+                ? NSColor(white: 1.0, alpha: 0.36)
+                : NSColor(white: 1.0, alpha: 0.22)
+        } else {
+            pillStrokeColor = isDragging
+                ? NSColor(white: 0.0, alpha: 0.22)
+                : NSColor(white: 0.0, alpha: 0.14)
+        }
         pillStrokeColor.setStroke()
         path.lineWidth = 0.8
         path.stroke()
+
+        // Subtle specular highlight on top / edge
+        let highlightPath = NSBezierPath()
+        if orientation == .horizontal {
+            let hX = pillRect.minX + 1.2
+            highlightPath.move(to: CGPoint(x: hX, y: pillRect.minY + 4))
+            highlightPath.line(to: CGPoint(x: hX, y: pillRect.maxY - 4))
+        } else {
+            let hY = pillRect.maxY - 1.2
+            highlightPath.move(to: CGPoint(x: pillRect.minX + 4, y: hY))
+            highlightPath.line(to: CGPoint(x: pillRect.maxX - 4, y: hY))
+        }
+        let highlightColor = isDark
+            ? NSColor(white: 1.0, alpha: 0.25)
+            : NSColor(white: 1.0, alpha: 0.60)
+        highlightColor.setStroke()
+        highlightPath.lineWidth = 0.75
+        highlightPath.stroke()
     }
 }

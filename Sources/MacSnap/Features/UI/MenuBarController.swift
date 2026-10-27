@@ -1,37 +1,40 @@
 import Cocoa
 import ServiceManagement
 
-/// Controls the MacSnap status icon and menu in the macOS top menu bar (NSStatusItem).
+/// Controls the MacSnap status icon and Control Center-style menu in the macOS top menu bar (`NSStatusItem`).
 @MainActor
 public final class MenuBarController: NSObject, NSMenuDelegate {
     private var statusItem: NSStatusItem?
     private let accessibilityService: AccessibilityServiceProtocol
     private let snapEngine: WindowSnappingProtocol
     private let pairingManager: PairedResizeManager
+    private let eventMonitor: GlobalEventMonitor
+
+    private static let menuWidth: CGFloat = 310.0
+
+    private weak var headerView: MenuHeaderView?
+    private weak var quickSnapView: QuickSnapSectionView?
+    private weak var controllersView: ControllersSectionView?
+    private weak var footerView: MenuFooterSectionView?
+    private weak var horizontalMenuItem: NSMenuItem?
+    private weak var verticalMenuItem: NSMenuItem?
 
     public init(
         accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared,
         snapEngine: WindowSnappingProtocol = SnapEngine.shared,
-        pairingManager: PairedResizeManager = PairedResizeManager.shared
+        pairingManager: PairedResizeManager = PairedResizeManager.shared,
+        eventMonitor: GlobalEventMonitor = GlobalEventMonitor.shared
     ) {
         self.accessibilityService = accessibilityService
         self.snapEngine = snapEngine
         self.pairingManager = pairingManager
+        self.eventMonitor = eventMonitor
         super.init()
         setupStatusItem()
     }
 
     public func menuWillOpen(_ menu: NSMenu) {
-        // Dynamically refresh accessibility permission status and login item checkmark whenever menu opens
-        let isGranted = accessibilityService.isAccessibilityGranted(promptIfNeeded: false)
-        menu.items.first?.title = isGranted ? "✓ Accessibility: Granted" : "⚠️ Accessibility: Permission Required"
-
-        for item in menu.items {
-            if item.action == #selector(toggleLaunchAtLogin) {
-                let isLaunchAtLogin = isLoginItemEnabled()
-                item.title = isLaunchAtLogin ? "✓ Launch at Login" : "Launch at Login"
-            }
-        }
+        refreshMenuState()
     }
 
     private func setupStatusItem() {
@@ -40,6 +43,7 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         if let button = statusItem?.button {
             button.image = makeMenuBarLogo()
             button.imagePosition = .imageOnly
+            button.alphaValue = eventMonitor.isMasterEnabled ? 1.0 : 0.45
         }
 
         rebuildMenu()
@@ -89,34 +93,138 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     public func rebuildMenu() {
         let menu = NSMenu()
         menu.delegate = self
+        menu.minimumWidth = Self.menuWidth
+        menu.autoenablesItems = false
 
-        // 1. Permissions indicator
-        let isGranted = accessibilityService.isAccessibilityGranted(promptIfNeeded: false)
-        let permTitle = isGranted ? "✓ Accessibility: Granted" : "⚠️ Accessibility: Permission Required"
-        let permItem = NSMenuItem(title: permTitle, action: #selector(openAccessibilityPreferences), keyEquivalent: "")
-        permItem.target = self
-        menu.addItem(permItem)
+        // 1. Control Center Header (App Badge, Title, Active/Paused Pill, Accessibility Status & Master NSSwitch)
+        let headerItem = NSMenuItem()
+        let header = MenuHeaderView(
+            width: Self.menuWidth,
+            isMasterEnabled: eventMonitor.isMasterEnabled,
+            isAccessibilityGranted: accessibilityService.isAccessibilityGranted(promptIfNeeded: false),
+            onMasterToggle: { [weak self] isEnabled in
+                self?.setMasterEnabled(isEnabled)
+            },
+            onOpenAccessibility: { [weak self] in
+                self?.statusItem?.menu?.cancelTracking()
+                self?.openAccessibilityPreferences()
+            }
+        )
+        headerItem.view = header
+        self.headerView = header
+        menu.addItem(headerItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // 2. Quick Snap actions
-        let leftItem = NSMenuItem(title: "Left Half", action: #selector(snapLeft), keyEquivalent: "")
-        leftItem.target = self
-        menu.addItem(leftItem)
+        // 2. Quick Snap Visual Grid (Left, Right, Max, Center - clean without shortcut labels)
+        let quickSnapItem = NSMenuItem()
+        let quickSnap = QuickSnapSectionView(
+            width: Self.menuWidth,
+            onSelectZone: { [weak self] zone in
+                self?.statusItem?.menu?.cancelTracking()
+                self?.snapEngine.snapFocusedWindow(to: zone)
+            }
+        )
+        quickSnapItem.view = quickSnap
+        self.quickSnapView = quickSnap
+        menu.addItem(quickSnapItem)
 
-        let rightItem = NSMenuItem(title: "Right Half", action: #selector(snapRight), keyEquivalent: "")
-        rightItem.target = self
-        menu.addItem(rightItem)
+        // 3. Submenu for Horizontal Layouts
+        let horizontalMenu = buildHorizontalSubmenu()
+        let horizontalParentItem = NSMenuItem(title: "Horizontal Layouts", action: nil, keyEquivalent: "")
+        horizontalParentItem.image = makeLayoutIcon(isHorizontal: true)
+        horizontalParentItem.submenu = horizontalMenu
+        self.horizontalMenuItem = horizontalParentItem
+        menu.addItem(horizontalParentItem)
 
-        let maxItem = NSMenuItem(title: "Maximize Window", action: #selector(snapMaximize), keyEquivalent: "")
-        maxItem.target = self
-        menu.addItem(maxItem)
+        // 4. Submenu for Vertical Layouts
+        let verticalMenu = buildVerticalSubmenu()
+        let verticalParentItem = NSMenuItem(title: "Vertical Layouts", action: nil, keyEquivalent: "")
+        verticalParentItem.image = makeLayoutIcon(isHorizontal: false)
+        verticalParentItem.submenu = verticalMenu
+        self.verticalMenuItem = verticalParentItem
+        menu.addItem(verticalParentItem)
 
-        let centerItem = NSMenuItem(title: "Center (Middle Third)", action: #selector(snapCenter), keyEquivalent: "")
-        centerItem.target = self
-        menu.addItem(centerItem)
+        menu.addItem(NSMenuItem.separator())
 
-        // 3. Submenu for Horizontal Columns and Asymmetric splits (16:9 / Ultrawide)
+        // 5. Controllers Card (Top Snap Bar, Edge & Corner Snap, Paired Window Divider + Reconnect Pair & Clear)
+        let controllersItem = NSMenuItem()
+        let controllers = ControllersSectionView(
+            width: Self.menuWidth,
+            isTopBarEnabled: eventMonitor.isTopSnapBarEnabled,
+            isEdgeSnapEnabled: eventMonitor.isEdgeSnapEnabled,
+            isDividerEnabled: pairingManager.isDividerEnabled,
+            onToggleTopBar: { [weak self] isEnabled in
+                self?.eventMonitor.isTopSnapBarEnabled = isEnabled
+            },
+            onToggleEdgeSnap: { [weak self] isEnabled in
+                self?.eventMonitor.isEdgeSnapEnabled = isEnabled
+            },
+            onToggleDivider: { [weak self] isEnabled in
+                self?.pairingManager.isDividerEnabled = isEnabled
+            },
+            onReconnectPair: { [weak self] in
+                self?.statusItem?.menu?.cancelTracking()
+                self?.pairingManager.autoDetectAdjacentWindows()
+            },
+            onClearPair: { [weak self] in
+                self?.statusItem?.menu?.cancelTracking()
+                self?.pairingManager.clearPairing()
+            }
+        )
+        controllersItem.view = controllers
+        self.controllersView = controllers
+        menu.addItem(controllersItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // 6. System & Footer (Launch at Login NSSwitch + Version + Quit)
+        let footerItem = NSMenuItem()
+        let versionString = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0.6"
+        let footer = MenuFooterSectionView(
+            width: Self.menuWidth,
+            isLaunchAtLogin: isLoginItemEnabled(),
+            versionText: "MacSnap v\(versionString)",
+            onToggleLaunchAtLogin: { [weak self] _ in
+                self?.toggleLaunchAtLogin()
+            },
+            onQuit: { [weak self] in
+                self?.statusItem?.menu?.cancelTracking()
+                self?.quitApp()
+            }
+        )
+        footerItem.view = footer
+        self.footerView = footer
+        menu.addItem(footerItem)
+
+        statusItem?.menu = menu
+        refreshMenuState()
+    }
+
+    private func refreshMenuState() {
+        let isGranted = accessibilityService.isAccessibilityGranted(promptIfNeeded: false)
+        let isMaster = eventMonitor.isMasterEnabled
+
+        headerView?.updateState(isMasterEnabled: isMaster, isAccessibilityGranted: isGranted)
+        quickSnapView?.setEnabledState(isMaster)
+        controllersView?.updateState(
+            isMasterEnabled: isMaster,
+            isTopBarEnabled: eventMonitor.isTopSnapBarEnabled,
+            isEdgeSnapEnabled: eventMonitor.isEdgeSnapEnabled,
+            isDividerEnabled: pairingManager.isDividerEnabled
+        )
+        horizontalMenuItem?.isEnabled = isMaster
+        verticalMenuItem?.isEnabled = isMaster
+        footerView?.updateLaunchAtLogin(isLoginItemEnabled())
+        statusItem?.button?.alphaValue = isMaster ? 1.0 : 0.45
+    }
+
+    private func setMasterEnabled(_ isEnabled: Bool) {
+        eventMonitor.isMasterEnabled = isEnabled
+        refreshMenuState()
+    }
+
+    private func buildHorizontalSubmenu() -> NSMenu {
         let horizontalMenu = NSMenu()
         let leftThirdItem = NSMenuItem(title: "Left Column (1/3)", action: #selector(snapLeftThird), keyEquivalent: "")
         leftThirdItem.target = self
@@ -136,15 +244,14 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         leftTwoThirdsItem.target = self
         horizontalMenu.addItem(leftTwoThirdsItem)
 
-        let leftOneThirdItem = NSMenuItem(title: "Left 1/3 + Right 2/3 (Inverse)", action: #selector(snapLeftOneThird), keyEquivalent: "")
+        let leftOneThirdItem = NSMenuItem(title: "Left 1/3 + Right 2/3", action: #selector(snapLeftOneThird), keyEquivalent: "")
         leftOneThirdItem.target = self
         horizontalMenu.addItem(leftOneThirdItem)
 
-        let horizontalParentItem = NSMenuItem(title: "Horizontal Layouts (16:9)", action: nil, keyEquivalent: "")
-        horizontalParentItem.submenu = horizontalMenu
-        menu.addItem(horizontalParentItem)
+        return horizontalMenu
+    }
 
-        // 4. Submenu for Vertical Layouts (Portrait)
+    private func buildVerticalSubmenu() -> NSMenu {
         let verticalMenu = NSMenu()
         let topHalfItem = NSMenuItem(title: "Top Half", action: #selector(snapTopHalf), keyEquivalent: "")
         topHalfItem.target = self
@@ -170,54 +277,65 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
 
         verticalMenu.addItem(NSMenuItem.separator())
 
-        let topTwoThirdsItem = NSMenuItem(title: "Top 2/3 + Bottom 1/3", action: #selector(snapTopTwoThirds), keyEquivalent: "")
+        let topTwoThirdsItem = NSMenuItem(title: "Top Two-Thirds (2/3)", action: #selector(snapTopTwoThirds), keyEquivalent: "")
         topTwoThirdsItem.target = self
         verticalMenu.addItem(topTwoThirdsItem)
 
-        let bottomTwoThirdsItem = NSMenuItem(title: "Top 1/3 + Bottom 2/3 (Inverse)", action: #selector(snapBottomTwoThirds), keyEquivalent: "")
+        let bottomTwoThirdsItem = NSMenuItem(title: "Bottom Two-Thirds (2/3)", action: #selector(snapBottomTwoThirds), keyEquivalent: "")
         bottomTwoThirdsItem.target = self
         verticalMenu.addItem(bottomTwoThirdsItem)
 
-        let verticalParentItem = NSMenuItem(title: "Vertical Layouts (Portrait)", action: nil, keyEquivalent: "")
-        verticalParentItem.submenu = verticalMenu
-        menu.addItem(verticalParentItem)
+        return verticalMenu
+    }
 
-        menu.addItem(NSMenuItem.separator())
+    private func makeLayoutIcon(isHorizontal: Bool) -> NSImage {
+        let size = NSSize(width: 16, height: 16)
+        let image = NSImage(size: size, flipped: false) { _ in
+            NSColor.black.setStroke()
+            if isHorizontal {
+                let outer = NSBezierPath(roundedRect: NSRect(x: 1.5, y: 2.5, width: 13.0, height: 11.0), xRadius: 2.0, yRadius: 2.0)
+                outer.lineWidth = 1.25
+                outer.stroke()
 
-        let detectItem = NSMenuItem(title: "Reconnect Adjacent Windows", action: #selector(autoDetectWindows), keyEquivalent: "d")
-        detectItem.target = self
-        menu.addItem(detectItem)
+                let line1 = NSBezierPath()
+                line1.move(to: NSPoint(x: 5.8, y: 2.5))
+                line1.line(to: NSPoint(x: 5.8, y: 13.5))
+                line1.lineWidth = 1.1
+                line1.stroke()
 
-        let clearPairItem = NSMenuItem(title: "Clear Paired Divider", action: #selector(clearPairing), keyEquivalent: "")
-        clearPairItem.target = self
-        menu.addItem(clearPairItem)
+                let line2 = NSBezierPath()
+                line2.move(to: NSPoint(x: 10.2, y: 2.5))
+                line2.line(to: NSPoint(x: 10.2, y: 13.5))
+                line2.lineWidth = 1.1
+                line2.stroke()
+            } else {
+                let outer = NSBezierPath(roundedRect: NSRect(x: 2.5, y: 1.5, width: 11.0, height: 13.0), xRadius: 2.0, yRadius: 2.0)
+                outer.lineWidth = 1.25
+                outer.stroke()
 
-        menu.addItem(NSMenuItem.separator())
+                let line1 = NSBezierPath()
+                line1.move(to: NSPoint(x: 2.5, y: 5.8))
+                line1.line(to: NSPoint(x: 13.5, y: 5.8))
+                line1.lineWidth = 1.1
+                line1.stroke()
 
-        // Launch at Login via SMAppService
-        let isLaunchAtLogin = isLoginItemEnabled()
-        let launchItem = NSMenuItem(
-            title: isLaunchAtLogin ? "✓ Launch at Login" : "Launch at Login",
-            action: #selector(toggleLaunchAtLogin),
-            keyEquivalent: ""
-        )
-        launchItem.target = self
-        menu.addItem(launchItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // Quit MacSnap
-        let quitItem = NSMenuItem(title: "Quit MacSnap", action: #selector(quitApp), keyEquivalent: "q")
-        quitItem.target = self
-        menu.addItem(quitItem)
-
-        statusItem?.menu = menu
+                let line2 = NSBezierPath()
+                line2.move(to: NSPoint(x: 2.5, y: 10.2))
+                line2.line(to: NSPoint(x: 13.5, y: 10.2))
+                line2.lineWidth = 1.1
+                line2.stroke()
+            }
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 
     @objc private func openAccessibilityPreferences() {
         _ = accessibilityService.isAccessibilityGranted(promptIfNeeded: true)
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
-        NSWorkspace.shared.open(url)
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     @objc private func snapLeft() {
@@ -280,14 +398,6 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         snapEngine.snapFocusedWindow(to: .leftOneThird)
     }
 
-    @objc private func autoDetectWindows() {
-        pairingManager.autoDetectAdjacentWindows()
-    }
-
-    @objc private func clearPairing() {
-        pairingManager.clearPairing()
-    }
-
     private func isLoginItemEnabled() -> Bool {
         return SMAppService.mainApp.status == .enabled
     }
@@ -304,10 +414,701 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         } catch {
             print("[MacSnap] Error toggling launch at login via SMAppService: \(error)")
         }
-        rebuildMenu()
+        footerView?.updateLaunchAtLogin(isLoginItemEnabled())
     }
 
     @objc private func quitApp() {
         NSApplication.shared.terminate(nil)
+    }
+}
+
+// MARK: - 1. Header View (App Badge + Status Pill + Accessibility Dot + Master NSSwitch)
+
+@MainActor
+private final class MenuHeaderView: NSView {
+    private let statusPillLabel = NSTextField(labelWithString: "Active")
+    private let statusPillContainer = NSView()
+    private let accessibilityDot = NSView()
+    private let accessibilityButton = NSButton()
+    private let masterSwitch = NSSwitch()
+    private let onMasterToggle: (Bool) -> Void
+    private let onOpenAccessibility: () -> Void
+
+    init(
+        width: CGFloat,
+        isMasterEnabled: Bool,
+        isAccessibilityGranted: Bool,
+        onMasterToggle: @escaping (Bool) -> Void,
+        onOpenAccessibility: @escaping () -> Void
+    ) {
+        self.onMasterToggle = onMasterToggle
+        self.onOpenAccessibility = onOpenAccessibility
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 52))
+        setupUI()
+        updateState(isMasterEnabled: isMasterEnabled, isAccessibilityGranted: isAccessibilityGranted)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setupUI() {
+        let badgeView = AppBadgeIconView(frame: NSRect(x: 14, y: 10, width: 32, height: 32))
+        addSubview(badgeView)
+
+        let titleLabel = NSTextField(labelWithString: "MacSnap")
+        titleLabel.font = NSFont.systemFont(ofSize: 13.5, weight: .semibold)
+        titleLabel.textColor = .labelColor
+        titleLabel.frame = NSRect(x: 54, y: 25, width: 65, height: 18)
+        addSubview(titleLabel)
+
+        statusPillContainer.wantsLayer = true
+        statusPillContainer.layer?.cornerRadius = 4.5
+        statusPillContainer.frame = NSRect(x: 121, y: 26, width: 48, height: 16)
+
+        statusPillLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .medium)
+        statusPillLabel.alignment = .center
+        statusPillLabel.frame = NSRect(x: 0, y: 1, width: 48, height: 14)
+        statusPillContainer.addSubview(statusPillLabel)
+        addSubview(statusPillContainer)
+
+        accessibilityDot.wantsLayer = true
+        accessibilityDot.layer?.cornerRadius = 3.5
+        accessibilityDot.frame = NSRect(x: 55, y: 11, width: 7, height: 7)
+        addSubview(accessibilityDot)
+
+        accessibilityButton.isBordered = false
+        accessibilityButton.font = NSFont.systemFont(ofSize: 11.5, weight: .regular)
+        accessibilityButton.contentTintColor = .secondaryLabelColor
+        accessibilityButton.alignment = .left
+        accessibilityButton.target = self
+        accessibilityButton.action = #selector(accessibilityClicked)
+        accessibilityButton.frame = NSRect(x: 66, y: 6, width: 175, height: 16)
+        addSubview(accessibilityButton)
+
+        masterSwitch.controlSize = .small
+        masterSwitch.target = self
+        masterSwitch.action = #selector(masterSwitchChanged)
+        masterSwitch.frame = NSRect(x: bounds.width - 52, y: 15, width: 38, height: 22)
+        addSubview(masterSwitch)
+    }
+
+    func updateState(isMasterEnabled: Bool, isAccessibilityGranted: Bool) {
+        masterSwitch.state = isMasterEnabled ? .on : .off
+
+        if isMasterEnabled {
+            statusPillLabel.stringValue = "Active"
+            statusPillLabel.textColor = NSColor.controlAccentColor
+            statusPillContainer.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
+        } else {
+            statusPillLabel.stringValue = "Paused"
+            statusPillLabel.textColor = NSColor.secondaryLabelColor
+            statusPillContainer.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.16).cgColor
+        }
+
+        if isAccessibilityGranted {
+            accessibilityDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+            accessibilityButton.title = "Accessibility Granted"
+            accessibilityButton.contentTintColor = .secondaryLabelColor
+        } else {
+            accessibilityDot.layer?.backgroundColor = NSColor.systemOrange.cgColor
+            accessibilityButton.title = "Permission Required"
+            accessibilityButton.contentTintColor = .systemOrange
+        }
+    }
+
+    @objc private func masterSwitchChanged() {
+        onMasterToggle(masterSwitch.state == .on)
+    }
+
+    @objc private func accessibilityClicked() {
+        onOpenAccessibility()
+    }
+}
+
+private final class AppBadgeIconView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds, xRadius: 8.0, yRadius: 8.0)
+        let gradient = NSGradient(
+            starting: NSColor(calibratedRed: 0.04, green: 0.52, blue: 1.0, alpha: 1.0),
+            ending: NSColor(calibratedRed: 0.0, green: 0.33, blue: 0.83, alpha: 1.0)
+        )
+        gradient?.draw(in: path, angle: -45)
+
+        NSColor.white.setStroke()
+        let leftWindow = NSBezierPath(roundedRect: NSRect(x: 7.0, y: 8.5, width: 7.5, height: 15.0), xRadius: 1.8, yRadius: 1.8)
+        leftWindow.lineWidth = 1.4
+        leftWindow.stroke()
+
+        let rightWindow = NSBezierPath(roundedRect: NSRect(x: 17.5, y: 8.5, width: 7.5, height: 15.0), xRadius: 1.8, yRadius: 1.8)
+        rightWindow.lineWidth = 1.4
+        rightWindow.stroke()
+    }
+}
+
+// MARK: - 2. Quick Snap Visual Bento Grid (Clean: Icon + Title Only)
+
+@MainActor
+private final class QuickSnapSectionView: NSView {
+    private var tiles: [QuickSnapTileButton] = []
+
+    init(width: CGFloat, onSelectZone: @escaping (SnapZone) -> Void) {
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 80))
+
+        let sectionLabel = NSTextField(labelWithString: "QUICK SNAP")
+        sectionLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .semibold)
+        sectionLabel.textColor = .secondaryLabelColor
+        sectionLabel.frame = NSRect(x: 14, y: 58, width: 120, height: 14)
+        addSubview(sectionLabel)
+
+        let items: [(String, SnapZone)] = [
+            ("Left", .leftHalf),
+            ("Right", .rightHalf),
+            ("Max", .maximize),
+            ("Center", .centerThird)
+        ]
+
+        let sidePadding: CGFloat = 12.0
+        let spacing: CGFloat = 6.0
+        let totalSpacing = spacing * CGFloat(items.count - 1)
+        let tileWidth = floor((width - (sidePadding * 2) - totalSpacing) / CGFloat(items.count))
+        let tileHeight: CGFloat = 48.0
+
+        for (index, item) in items.enumerated() {
+            let x = sidePadding + CGFloat(index) * (tileWidth + spacing)
+            let tile = QuickSnapTileButton(
+                frame: NSRect(x: x, y: 6, width: tileWidth, height: tileHeight),
+                title: item.0,
+                zone: item.1,
+                onClick: { onSelectZone(item.1) }
+            )
+            addSubview(tile)
+            tiles.append(tile)
+        }
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setEnabledState(_ enabled: Bool) {
+        alphaValue = enabled ? 1.0 : 0.4
+        tiles.forEach { $0.isEnabled = enabled }
+    }
+}
+
+@MainActor
+private final class QuickSnapTileButton: NSView {
+    private let title: String
+    private let zone: SnapZone
+    private let onClick: () -> Void
+    private var isHovered = false
+    var isEnabled = true
+
+    init(frame: NSRect, title: String, zone: SnapZone, onClick: @escaping () -> Void) {
+        self.title = title
+        self.zone = zone
+        self.onClick = onClick
+        super.init(frame: frame)
+        wantsLayer = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach { removeTrackingArea($0) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        guard isEnabled else { return }
+        isHovered = true
+        needsDisplay = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        needsDisplay = true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabled else { return }
+        onClick()
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let bgPath = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 9.0, yRadius: 9.0)
+        if isHovered && isEnabled {
+            NSColor.controlAccentColor.setFill()
+            bgPath.fill()
+            NSColor.white.withAlphaComponent(0.25).setStroke()
+            bgPath.lineWidth = 1.0
+            bgPath.stroke()
+        } else {
+            NSColor.labelColor.withAlphaComponent(0.06).setFill()
+            bgPath.fill()
+            NSColor.labelColor.withAlphaComponent(0.10).setStroke()
+            bgPath.lineWidth = 1.0
+            bgPath.stroke()
+        }
+
+        let fgColor: NSColor = (isHovered && isEnabled) ? .white : .labelColor
+
+        // Draw proportional screen & active zone icon at top center
+        let iconWidth: CGFloat = 22.0
+        let iconHeight: CGFloat = 15.0
+        let iconRect = NSRect(
+            x: (bounds.width - iconWidth) / 2.0,
+            y: bounds.height - iconHeight - 7.0,
+            width: iconWidth,
+            height: iconHeight
+        )
+        let screenOutline = NSBezierPath(roundedRect: iconRect, xRadius: 2.5, yRadius: 2.5)
+        fgColor.withAlphaComponent(0.45).setStroke()
+        screenOutline.lineWidth = 1.25
+        screenOutline.stroke()
+
+        let innerRect: NSRect
+        switch zone {
+        case .leftHalf:
+            innerRect = NSRect(x: iconRect.minX + 2.0, y: iconRect.minY + 2.0, width: 8.0, height: iconRect.height - 4.0)
+        case .rightHalf:
+            innerRect = NSRect(x: iconRect.maxX - 10.0, y: iconRect.minY + 2.0, width: 8.0, height: iconRect.height - 4.0)
+        case .maximize:
+            innerRect = iconRect.insetBy(dx: 2.0, dy: 2.0)
+        default:
+            innerRect = NSRect(x: iconRect.midX - 5.0, y: iconRect.minY + 2.5, width: 10.0, height: iconRect.height - 5.0)
+        }
+        let zonePath = NSBezierPath(roundedRect: innerRect, xRadius: 1.3, yRadius: 1.3)
+        fgColor.setFill()
+        zonePath.fill()
+
+        // Draw clean label below icon (no shortcut symbols)
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 11.5, weight: .medium),
+            .foregroundColor: fgColor,
+            .paragraphStyle: paragraph
+        ]
+        let textRect = NSRect(x: 2, y: 5, width: bounds.width - 4, height: 15)
+        (title as NSString).draw(in: textRect, withAttributes: attrs)
+    }
+}
+
+// MARK: - 3. Controllers Section View (3 NSSwitch Rows + Reconnect Pair & Clear Buttons)
+
+@MainActor
+private final class ControllersSectionView: NSView {
+    private let topBarSwitch = NSSwitch()
+    private let edgeSnapSwitch = NSSwitch()
+    private let dividerSwitch = NSSwitch()
+    private var reconnectButton: ActionPillButton?
+    private var clearButton: ActionPillButton?
+
+    private let onToggleTopBar: (Bool) -> Void
+    private let onToggleEdgeSnap: (Bool) -> Void
+    private let onToggleDivider: (Bool) -> Void
+
+    init(
+        width: CGFloat,
+        isTopBarEnabled: Bool,
+        isEdgeSnapEnabled: Bool,
+        isDividerEnabled: Bool,
+        onToggleTopBar: @escaping (Bool) -> Void,
+        onToggleEdgeSnap: @escaping (Bool) -> Void,
+        onToggleDivider: @escaping (Bool) -> Void,
+        onReconnectPair: @escaping () -> Void,
+        onClearPair: @escaping () -> Void
+    ) {
+        self.onToggleTopBar = onToggleTopBar
+        self.onToggleEdgeSnap = onToggleEdgeSnap
+        self.onToggleDivider = onToggleDivider
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 172))
+
+        let sectionLabel = NSTextField(labelWithString: "CONTROLLERS")
+        sectionLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .semibold)
+        sectionLabel.textColor = .secondaryLabelColor
+        sectionLabel.frame = NSRect(x: 14, y: 150, width: 120, height: 14)
+        addSubview(sectionLabel)
+
+        let cardRect = NSRect(x: 12, y: 40, width: width - 24, height: 104)
+        let cardView = RoundedCardContainerView(frame: cardRect)
+        addSubview(cardView)
+
+        // Row 1: Top Snap Bar
+        let row1 = makeControllerRow(
+            width: cardRect.width,
+            y: 68,
+            title: "Top Snap Bar",
+            iconKind: .topBar,
+            tintColor: .systemBlue,
+            toggle: topBarSwitch,
+            action: #selector(topBarSwitchChanged)
+        )
+        cardView.addSubview(row1)
+
+        // Row 2: Edge & Corner Snap
+        let row2 = makeControllerRow(
+            width: cardRect.width,
+            y: 35,
+            title: "Edge & Corner Snap",
+            iconKind: .edgeSnap,
+            tintColor: .systemIndigo,
+            toggle: edgeSnapSwitch,
+            action: #selector(edgeSnapSwitchChanged)
+        )
+        cardView.addSubview(row2)
+
+        // Row 3: Paired Window Divider
+        let row3 = makeControllerRow(
+            width: cardRect.width,
+            y: 2,
+            title: "Paired Window Divider",
+            iconKind: .divider,
+            tintColor: .systemPurple,
+            toggle: dividerSwitch,
+            action: #selector(dividerSwitchChanged)
+        )
+        cardView.addSubview(row3)
+
+        // Bottom Action Buttons: Reconnect Pair & Clear
+        let clearW: CGFloat = 68.0
+        let spacing: CGFloat = 6.0
+        let reconnectW = (width - 24.0) - clearW - spacing
+
+        let reconnectBtn = ActionPillButton(
+            frame: NSRect(x: 12, y: 6, width: reconnectW, height: 28),
+            title: "Reconnect Pair",
+            onClick: onReconnectPair
+        )
+        addSubview(reconnectBtn)
+        self.reconnectButton = reconnectBtn
+
+        let clearBtn = ActionPillButton(
+            frame: NSRect(x: 12 + reconnectW + spacing, y: 6, width: clearW, height: 28),
+            title: "Clear",
+            onClick: onClearPair
+        )
+        addSubview(clearBtn)
+        self.clearButton = clearBtn
+
+        updateState(
+            isMasterEnabled: true,
+            isTopBarEnabled: isTopBarEnabled,
+            isEdgeSnapEnabled: isEdgeSnapEnabled,
+            isDividerEnabled: isDividerEnabled
+        )
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func makeControllerRow(
+        width: CGFloat,
+        y: CGFloat,
+        title: String,
+        iconKind: ControllerIconView.IconKind,
+        tintColor: NSColor,
+        toggle: NSSwitch,
+        action: Selector
+    ) -> NSView {
+        let row = NSView(frame: NSRect(x: 0, y: y, width: width, height: 32))
+
+        let iconView = ControllerIconView(
+            frame: NSRect(x: 8, y: 4, width: 24, height: 24),
+            kind: iconKind,
+            tintColor: tintColor
+        )
+        row.addSubview(iconView)
+
+        let label = NSTextField(labelWithString: title)
+        label.font = NSFont.systemFont(ofSize: 12.5, weight: .medium)
+        label.textColor = .labelColor
+        label.frame = NSRect(x: 40, y: 7, width: width - 92, height: 18)
+        row.addSubview(label)
+
+        toggle.controlSize = .small
+        toggle.target = self
+        toggle.action = action
+        toggle.frame = NSRect(x: width - 46, y: 5, width: 38, height: 22)
+        row.addSubview(toggle)
+
+        return row
+    }
+
+    func updateState(
+        isMasterEnabled: Bool,
+        isTopBarEnabled: Bool,
+        isEdgeSnapEnabled: Bool,
+        isDividerEnabled: Bool
+    ) {
+        alphaValue = isMasterEnabled ? 1.0 : 0.4
+        topBarSwitch.isEnabled = isMasterEnabled
+        edgeSnapSwitch.isEnabled = isMasterEnabled
+        dividerSwitch.isEnabled = isMasterEnabled
+        topBarSwitch.state = isTopBarEnabled ? .on : .off
+        edgeSnapSwitch.state = isEdgeSnapEnabled ? .on : .off
+        dividerSwitch.state = isDividerEnabled ? .on : .off
+        reconnectButton?.isEnabled = isMasterEnabled && isDividerEnabled
+        clearButton?.isEnabled = isMasterEnabled && isDividerEnabled
+    }
+
+    @objc private func topBarSwitchChanged() {
+        onToggleTopBar(topBarSwitch.state == .on)
+    }
+
+    @objc private func edgeSnapSwitchChanged() {
+        onToggleEdgeSnap(edgeSnapSwitch.state == .on)
+    }
+
+    @objc private func dividerSwitchChanged() {
+        let isOn = dividerSwitch.state == .on
+        onToggleDivider(isOn)
+        reconnectButton?.isEnabled = isOn
+        clearButton?.isEnabled = isOn
+    }
+}
+
+private final class RoundedCardContainerView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 10.0, yRadius: 10.0)
+        NSColor.labelColor.withAlphaComponent(0.05).setFill()
+        path.fill()
+        NSColor.labelColor.withAlphaComponent(0.09).setStroke()
+        path.lineWidth = 1.0
+        path.stroke()
+    }
+}
+
+private final class ControllerIconView: NSView {
+    enum IconKind {
+        case topBar
+        case edgeSnap
+        case divider
+    }
+
+    private let kind: IconKind
+    private let tintColor: NSColor
+
+    init(frame: NSRect, kind: IconKind, tintColor: NSColor) {
+        self.kind = kind
+        self.tintColor = tintColor
+        super.init(frame: frame)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let bg = NSBezierPath(roundedRect: bounds, xRadius: 6.0, yRadius: 6.0)
+        tintColor.withAlphaComponent(0.20).setFill()
+        bg.fill()
+
+        tintColor.setStroke()
+        tintColor.setFill()
+
+        switch kind {
+        case .topBar:
+            let outer = NSBezierPath(roundedRect: NSRect(x: 4.5, y: 5.0, width: 15.0, height: 14.0), xRadius: 2.0, yRadius: 2.0)
+            outer.lineWidth = 1.35
+            outer.stroke()
+            let pill = NSBezierPath(roundedRect: NSRect(x: 7.5, y: 15.2, width: 9.0, height: 3.2), xRadius: 1.0, yRadius: 1.0)
+            pill.fill()
+
+        case .edgeSnap:
+            let path = NSBezierPath()
+            // Top-left corner bracket
+            path.move(to: NSPoint(x: 5, y: 15))
+            path.line(to: NSPoint(x: 5, y: 19))
+            path.line(to: NSPoint(x: 9, y: 19))
+            // Top-right corner bracket
+            path.move(to: NSPoint(x: 15, y: 19))
+            path.line(to: NSPoint(x: 19, y: 19))
+            path.line(to: NSPoint(x: 19, y: 15))
+            // Bottom-right corner bracket
+            path.move(to: NSPoint(x: 19, y: 9))
+            path.line(to: NSPoint(x: 19, y: 5))
+            path.line(to: NSPoint(x: 15, y: 5))
+            // Bottom-left corner bracket
+            path.move(to: NSPoint(x: 9, y: 5))
+            path.line(to: NSPoint(x: 5, y: 5))
+            path.line(to: NSPoint(x: 5, y: 9))
+            path.lineWidth = 1.5
+            path.lineCapStyle = .round
+            path.stroke()
+
+        case .divider:
+            let centerLine = NSBezierPath()
+            centerLine.move(to: NSPoint(x: 12, y: 4.5))
+            centerLine.line(to: NSPoint(x: 12, y: 19.5))
+            centerLine.lineWidth = 1.6
+            centerLine.lineCapStyle = .round
+            centerLine.stroke()
+
+            let arrows = NSBezierPath()
+            arrows.move(to: NSPoint(x: 8.5, y: 9.5))
+            arrows.line(to: NSPoint(x: 6.0, y: 12.0))
+            arrows.line(to: NSPoint(x: 8.5, y: 14.5))
+
+            arrows.move(to: NSPoint(x: 15.5, y: 9.5))
+            arrows.line(to: NSPoint(x: 18.0, y: 12.0))
+            arrows.line(to: NSPoint(x: 15.5, y: 14.5))
+            arrows.lineWidth = 1.35
+            arrows.lineCapStyle = .round
+            arrows.lineJoinStyle = .round
+            arrows.stroke()
+        }
+    }
+}
+
+@MainActor
+private final class ActionPillButton: NSView {
+    private let title: String
+    private let onClick: () -> Void
+    private var isHovered = false
+    var isEnabled = true {
+        didSet {
+            alphaValue = isEnabled ? 1.0 : 0.45
+            needsDisplay = true
+        }
+    }
+
+    init(frame: NSRect, title: String, onClick: @escaping () -> Void) {
+        self.title = title
+        self.onClick = onClick
+        super.init(frame: frame)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        trackingAreas.forEach { removeTrackingArea($0) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        guard isEnabled else { return }
+        isHovered = true
+        needsDisplay = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        isHovered = false
+        needsDisplay = true
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabled else { return }
+        onClick()
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 7.5, yRadius: 7.5)
+        if isHovered && isEnabled {
+            NSColor.controlAccentColor.setFill()
+            path.fill()
+        } else {
+            NSColor.labelColor.withAlphaComponent(0.07).setFill()
+            path.fill()
+            NSColor.labelColor.withAlphaComponent(0.10).setStroke()
+            path.lineWidth = 1.0
+            path.stroke()
+        }
+
+        let textColor: NSColor = (isHovered && isEnabled) ? .white : .labelColor
+        let paragraph = NSMutableParagraphStyle()
+        paragraph.alignment = .center
+        let attrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 12.0, weight: .medium),
+            .foregroundColor: textColor,
+            .paragraphStyle: paragraph
+        ]
+        let textRect = NSRect(x: 4, y: 6, width: bounds.width - 8, height: 16)
+        (title as NSString).draw(in: textRect, withAttributes: attrs)
+    }
+}
+
+// MARK: - 4. System & Footer View (Launch at Login Switch + Version + Quit)
+
+@MainActor
+private final class MenuFooterSectionView: NSView {
+    private let loginSwitch = NSSwitch()
+    private let onToggleLaunchAtLogin: (Bool) -> Void
+    private let onQuit: () -> Void
+
+    init(
+        width: CGFloat,
+        isLaunchAtLogin: Bool,
+        versionText: String,
+        onToggleLaunchAtLogin: @escaping (Bool) -> Void,
+        onQuit: @escaping () -> Void
+    ) {
+        self.onToggleLaunchAtLogin = onToggleLaunchAtLogin
+        self.onQuit = onQuit
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 60))
+
+        let loginLabel = NSTextField(labelWithString: "Launch at Login")
+        loginLabel.font = NSFont.systemFont(ofSize: 12.5, weight: .medium)
+        loginLabel.textColor = .labelColor
+        loginLabel.frame = NSRect(x: 16, y: 34, width: 160, height: 18)
+        addSubview(loginLabel)
+
+        loginSwitch.controlSize = .small
+        loginSwitch.state = isLaunchAtLogin ? .on : .off
+        loginSwitch.target = self
+        loginSwitch.action = #selector(loginSwitchChanged)
+        loginSwitch.frame = NSRect(x: width - 52, y: 32, width: 38, height: 22)
+        addSubview(loginSwitch)
+
+        let versionLabel = NSTextField(labelWithString: versionText)
+        versionLabel.font = NSFont.systemFont(ofSize: 11.5, weight: .regular)
+        versionLabel.textColor = .secondaryLabelColor
+        versionLabel.frame = NSRect(x: 16, y: 6, width: 140, height: 16)
+        addSubview(versionLabel)
+
+        let quitButton = NSButton(title: "Quit", target: self, action: #selector(quitClicked))
+        quitButton.isBordered = false
+        quitButton.font = NSFont.systemFont(ofSize: 12.0, weight: .medium)
+        quitButton.contentTintColor = .secondaryLabelColor
+        quitButton.alignment = .right
+        quitButton.frame = NSRect(x: width - 66, y: 5, width: 50, height: 18)
+        addSubview(quitButton)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func updateLaunchAtLogin(_ enabled: Bool) {
+        loginSwitch.state = enabled ? .on : .off
+    }
+
+    @objc private func loginSwitchChanged() {
+        onToggleLaunchAtLogin(loginSwitch.state == .on)
+    }
+
+    @objc private func quitClicked() {
+        onQuit()
     }
 }

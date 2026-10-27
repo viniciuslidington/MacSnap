@@ -41,6 +41,20 @@ public final class PairedResizeManager {
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
 
+    private static let dividerEnabledKey = "MacSnap.isDividerEnabled"
+
+    /// Controls whether the interactive paired window divider ("swiper") is enabled.
+    public var isDividerEnabled: Bool = (UserDefaults.standard.object(forKey: dividerEnabledKey) as? Bool) ?? true {
+        didSet {
+            UserDefaults.standard.set(isDividerEnabled, forKey: Self.dividerEnabledKey)
+            if !isDividerEnabled {
+                clearPairing()
+            } else if GlobalEventMonitor.shared.isMasterEnabled {
+                autoDetectAdjacentWindows()
+            }
+        }
+    }
+
     /// Indicates whether an interactive resize divider is actively being dragged on any screen.
     public var isDraggingDivider: Bool {
         statesByScreen.values.contains { $0.dividerWindow.isDragging }
@@ -469,6 +483,7 @@ public final class PairedResizeManager {
 
     /// Registers a newly snapped window and activates the divider if an opposite partner is present on that display.
     public func registerSnap(window: WindowElement, zone: SnapZone, screen: NSScreen) {
+        guard isDividerEnabled && GlobalEventMonitor.shared.isMasterEnabled else { return }
         let visibleFrame = screen.visibleFrame
         let screenState = state(for: screen)
 
@@ -619,6 +634,7 @@ public final class PairedResizeManager {
         on screen: NSScreen,
         ratio: CGFloat = 0.5
     ) {
+        guard isDividerEnabled && GlobalEventMonitor.shared.isMasterEnabled else { return }
         let screenState = state(for: screen)
         let pair = PairedSplit(
             firstWindow: first,
@@ -637,6 +653,7 @@ public final class PairedResizeManager {
     /// that share a common boundary (side-by-side or stacked) and connects the interactive divider between them.
     @discardableResult
     public func autoDetectAdjacentWindows(on targetScreen: NSScreen? = nil) -> [PairedSplit] {
+        guard isDividerEnabled && GlobalEventMonitor.shared.isMasterEnabled else { return [] }
         let screensToScan = targetScreen != nil ? [targetScreen!] : screenService.screens
         var detectedPairs: [PairedSplit] = []
 

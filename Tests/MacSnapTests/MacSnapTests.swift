@@ -718,4 +718,42 @@ struct SnapGeometryTests {
         state.dividerWindow.hideDividerImmediately()
         #expect(state.dividerWindow.contentView?.alphaValue == 0.0)
     }
+
+    @MainActor
+    @Test func testMenuBarControllerAndFeatureToggles() {
+        let monitor = GlobalEventMonitor.shared
+        let manager = PairedResizeManager.shared
+
+        defer {
+            monitor.isMasterEnabled = true
+            monitor.isTopSnapBarEnabled = true
+            monitor.isEdgeSnapEnabled = true
+            manager.isDividerEnabled = true
+        }
+
+        // Verify disabling divider prevents pairing and clears active pairs
+        guard let screen = NSScreen.screens.first else { return }
+        let dummy1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 8801)
+        let dummy2 = WindowElement(element: AXUIElementCreateApplication(8802), pid: 8802)
+
+        manager.isDividerEnabled = true
+        monitor.isMasterEnabled = true
+        manager.pair(first: dummy1, second: dummy2, orientation: .horizontal, on: screen, ratio: 0.5)
+        #expect(manager.state(for: screen).pair != nil)
+
+        manager.isDividerEnabled = false
+        #expect(manager.state(for: screen).pair == nil)
+
+        // Pairing while divider is disabled should be ignored
+        manager.pair(first: dummy1, second: dummy2, orientation: .horizontal, on: screen, ratio: 0.5)
+        #expect(manager.state(for: screen).pair == nil)
+
+        // Re-enabling divider and disabling master switch should also clear pairing
+        manager.isDividerEnabled = true
+        manager.pair(first: dummy1, second: dummy2, orientation: .horizontal, on: screen, ratio: 0.5)
+        #expect(manager.state(for: screen).pair != nil)
+
+        monitor.isMasterEnabled = false
+        #expect(manager.state(for: screen).pair == nil)
+    }
 }
