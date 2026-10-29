@@ -6,15 +6,25 @@ import Cocoa
 /// Robust implementation of communication with the Apple Accessibility API,
 /// with multi-level fallback support for capturing target windows even during active drags
 /// or when MacSnap panels/menus are frontmost.
+/// The native reference cache is synchronized; the observer token is assigned only during init.
+/// The unchecked bridge permits native AppKit/CF references without exposing mutable Swift state.
 public final class AccessibilityService: AccessibilityServiceProtocol, @unchecked Sendable {
     public static let shared = AccessibilityService()
 
+    private let activeAppLock = NSLock()
     private var lastActiveApp: NSRunningApplication?
+    private let notificationCenter: NotificationCenter
+    private var activationObserver: NSObjectProtocol?
 
-    public init() {
+    public convenience init() {
+        self.init(notificationCenter: NSWorkspace.shared.notificationCenter)
+    }
+
+    init(notificationCenter: NotificationCenter) {
+        self.notificationCenter = notificationCenter
         // Observes application activation to track the user's frontmost application
         // even when interacting with the MacSnap status bar menu
-        NSWorkspace.shared.notificationCenter.addObserver(
+        activationObserver = notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
@@ -22,9 +32,14 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
             guard let app = notif.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             let myPid = ProcessInfo.processInfo.processIdentifier
             if app.processIdentifier != myPid && app.activationPolicy == .regular {
-                self?.lastActiveApp = app
+                guard let self else { return }
+                self.activeAppLock.withLock { self.lastActiveApp = app }
             }
         }
+    }
+
+    deinit {
+        if let activationObserver { notificationCenter.removeObserver(activationObserver) }
     }
 
     public func isAccessibilityGranted(promptIfNeeded: Bool) -> Bool {
@@ -44,8 +59,7 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
         var targetPid: pid_t = 0
 
         if AXUIElementCopyAttributeValue(systemWideElement, kAXFocusedApplicationAttribute as CFString, &focusedAppValue) == .success,
-           let appVal = focusedAppValue {
-            let app = appVal as! AXUIElement
+           let app = Self.element(from: focusedAppValue) {
             var pid: pid_t = 0
             AXUIElementGetPid(app, &pid)
 
@@ -58,7 +72,8 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
 
         // 2. If the focused app is MacSnap (e.g. status bar menu is open),
         // fallback to the last registered active regular application
-        if targetAppElement == nil, let lastApp = lastActiveApp, !lastApp.isTerminated, lastApp.processIdentifier != myPid {
+        let previousApp = activeAppLock.withLock { lastActiveApp }
+        if targetAppElement == nil, let lastApp = previousApp, !lastApp.isTerminated, lastApp.processIdentifier != myPid {
             targetPid = lastApp.processIdentifier
             targetAppElement = AXUIElementCreateApplication(targetPid)
         }
@@ -120,21 +135,21 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
         // Attempt A: Focused Window
         var focusedWindowValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &focusedWindowValue) == .success,
-           let winVal = focusedWindowValue {
-            return WindowElement(element: winVal as! AXUIElement, pid: pid)
+           let window = Self.element(from: focusedWindowValue) {
+            return WindowElement(element: window, pid: pid)
         }
 
         // Attempt B: Main Window (common during title bar dragging)
         var mainWindowValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXMainWindowAttribute as CFString, &mainWindowValue) == .success,
-           let winVal = mainWindowValue {
-            return WindowElement(element: winVal as! AXUIElement, pid: pid)
+           let window = Self.element(from: mainWindowValue) {
+            return WindowElement(element: window, pid: pid)
         }
 
         // Attempt C: Application window list
         var windowsValue: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windowsValue) == .success,
-           let winArray = windowsValue as? [AXUIElement], let firstWin = winArray.first {
+           let firstWin = Self.elements(from: windowsValue).first {
             return WindowElement(element: firstWin, pid: pid)
         }
 
@@ -159,7 +174,9 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
         // If the element is not a window (could be button, text, etc.),
         // traverse up the hierarchy until reaching the parent window (kAXWindowRole)
         var current: AXUIElement = element
-        while true {
+        var visited: [AXUIElement] = []
+        while !visited.contains(where: { CFEqual($0, current) }) {
+            visited.append(current)
             var roleValue: CFTypeRef?
             if AXUIElementCopyAttributeValue(current, kAXRoleAttribute as CFString, &roleValue) == .success,
                let role = roleValue as? String, role == (kAXWindowRole as String) {
@@ -170,13 +187,24 @@ public final class AccessibilityService: AccessibilityServiceProtocol, @unchecke
 
             var parentValue: CFTypeRef?
             if AXUIElementCopyAttributeValue(current, kAXParentAttribute as CFString, &parentValue) == .success,
-               let parent = parentValue {
-                current = (parent as! AXUIElement)
+               let parent = Self.element(from: parentValue) {
+                current = parent
             } else {
                 break
             }
         }
 
         return nil
+    }
+
+    static func element(from value: CFTypeRef?) -> AXUIElement? {
+        guard let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return (value as! AXUIElement)
+    }
+
+    static func elements(from value: CFTypeRef?) -> [AXUIElement] {
+        guard let value, CFGetTypeID(value) == CFArrayGetTypeID(),
+              let values = value as? [AnyObject] else { return [] }
+        return values.compactMap { element(from: $0) }
     }
 }
