@@ -1921,6 +1921,98 @@ figcaption {
 .hero-copy {
   animation: none;
 }
+
+/* Motion follows the artwork, with no moving text or page-wide cursor layer. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .hero-product .workspace-art {
+    translate: calc(var(--pointer-x, 0px) * -0.55)
+      calc(var(--pointer-y, 0px) * -0.55);
+    transition: translate 500ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .hero-product .native-menu {
+    translate: var(--pointer-x, 0px) var(--pointer-y, 0px);
+    transition: translate 500ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .hero-product.is-tracking .workspace-art,
+  .hero-product.is-tracking .native-menu {
+    transition-duration: 180ms;
+  }
+  .layouts-capture {
+    position: relative;
+    isolation: isolate;
+  }
+  .layouts-capture::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    background: radial-gradient(
+      ellipse at calc(50% + var(--pointer-x, 0px) * 20)
+        calc(50% + var(--pointer-y, 0px) * 12),
+      #ffffffb3,
+      transparent 65%
+    );
+    opacity: 0;
+    transition: opacity 350ms;
+  }
+  .layouts-capture.is-tracking::before {
+    opacity: 1;
+  }
+  .mini-layout i {
+    transition:
+      translate 250ms,
+      background-color 250ms;
+  }
+  .layout-types li:hover .mini-layout i {
+    translate: 0 -3px;
+    background: #b8b09f;
+  }
+  .layout-types li:hover .mini-layout i:nth-child(2n) {
+    translate: 0 3px;
+  }
+}
+
+.pair-first,
+.pair-second {
+  min-width: 0;
+  overflow: hidden;
+}
+.pair-controls:not([hidden]) {
+  display: grid;
+  gap: 6px;
+  margin-top: 52px;
+}
+.pair-controls label {
+  font-size: 13px;
+  color: #62594c;
+}
+.pair-controls input {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  accent-color: var(--ink);
+  cursor: ew-resize;
+}
+.pair-controls input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.pair-controls:not([hidden]) + figcaption {
+  margin-top: 10px;
+}
+.pair-figure:focus-within .pair-divider > span {
+  box-shadow:
+    0 0 0 4px #f7f5f0,
+    0 0 0 5px var(--ink);
+}
+@media (max-width: 620px) {
+  .pair-diagram .diagram-heading {
+    font-size: 28px;
+  }
+}
 .site-footer nav a {
   display: inline-block;
   padding-block: 6px;
