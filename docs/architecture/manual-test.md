@@ -10,6 +10,8 @@ A versão continua **1.0.7 / build 7**. Não foi criada tag nem feita atualizaç
 4. Teste os cenários abaixo. O objetivo é conferir comportamento, não somente ausência de mensagens de erro.
 5. Para voltar, encerre o build de teste e abra `/Applications/MacSnap.app`. A instalação e a configuração de início automático não são substituídas pelo script.
 
+Para escolher o certificado de assinatura, defina `MACSNAP_SIGNING_IDENTITY` ao executar o script. Use `MACSNAP_SIGNING_IDENTITY=- ./scripts/build-development-app.sh` para solicitar assinatura ad-hoc.
+
 ## Roteiro
 
 | Cenário | Verificar |
