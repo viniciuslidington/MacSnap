@@ -5,6 +5,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private let accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared
     private let eventMonitor: EventMonitoringProtocol = GlobalEventMonitor.shared
+    private var activationObserver: NSObjectProtocol?
+    private var screenObserver: NSObjectProtocol?
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         print("[MacSnap] Starting application...")
@@ -25,7 +27,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         PairedResizeManager.shared.autoDetectAdjacentWindows()
 
         // Observe application switches to auto-connect adjacent windows and immediately suppress occluded dividers
-        NSWorkspace.shared.notificationCenter.addObserver(
+        if let activationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
+        }
+        activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
@@ -37,11 +42,27 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        screenObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { _ in
+            Task { @MainActor in PairedResizeManager.shared.handleScreenConfigurationChange() }
+        }
+
         print("[MacSnap] Ready to manage windows.")
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
+        if let activationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(activationObserver)
+            self.activationObserver = nil
+        }
+        if let screenObserver {
+            NotificationCenter.default.removeObserver(screenObserver)
+            self.screenObserver = nil
+        }
         eventMonitor.stopMonitoring()
+        PairedResizeManager.shared.clearPairing()
         print("[MacSnap] Quitting application.")
     }
 }

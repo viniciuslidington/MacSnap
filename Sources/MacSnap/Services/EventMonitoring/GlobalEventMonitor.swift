@@ -1,55 +1,55 @@
 import Cocoa
 import CoreGraphics
 
-/// Monitors global mouse cursor events using `CGEventTap` to detect
-/// when the user drags a window to screen edges or uses the Snap Layout Bar.
-/// Includes intelligent multi-monitor cursor following for vertical and horizontal displays.
+/// Native event capture and presentation for window dragging.
+/// Gesture recognition and snap placement own their state behind separate interfaces.
 @MainActor
 public final class GlobalEventMonitor: EventMonitoringProtocol {
     public static let shared = GlobalEventMonitor()
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
+    private var eventTapContext: EventTapContext?
+    private var monitoringGeneration: UInt64 = 0
+    private var recognition = DragRecognition<WindowElement>()
     private var activeZone: SnapZone?
     private var activeScreen: NSScreen?
-    private var currentDraggedWindow: WindowElement?
-    private var dragStartPoint: CGPoint?
-    private var isHoldingWindowOrTab: Bool = false
-    private var isDragGestureIgnored: Bool = false
-    private var isZoneFromLayoutBar: Bool = false
+    private var isZoneFromLayoutBar = false
 
     private static let masterEnabledKey = "MacSnap.isMasterEnabled"
     private static let topSnapBarEnabledKey = "MacSnap.isTopSnapBarEnabled"
     private static let edgeSnapEnabledKey = "MacSnap.isEdgeSnapEnabled"
 
-    /// Master switch controlling whether MacSnap is globally active or paused.
     public var isMasterEnabled: Bool = (UserDefaults.standard.object(forKey: masterEnabledKey) as? Bool) ?? true {
         didSet {
             UserDefaults.standard.set(isMasterEnabled, forKey: Self.masterEnabledKey)
             if !isMasterEnabled {
-                previewOverlay.dismiss()
-                snapLayoutBar.dismiss(animated: false)
-                PairedResizeManager.shared.clearPairing()
+                resetDragInteraction(ignoringUntilRelease: recognition.window != nil || recognition.isIgnored)
+                pairingManager.clearPairing()
             } else {
-                PairedResizeManager.shared.autoDetectAdjacentWindows()
+                pairingManager.autoDetectAdjacentWindows()
             }
         }
     }
 
-    /// Controls whether the Top Snap Layout Bar pill/modal appears when dragging windows.
     public var isTopSnapBarEnabled: Bool = (UserDefaults.standard.object(forKey: topSnapBarEnabledKey) as? Bool) ?? true {
         didSet {
             UserDefaults.standard.set(isTopSnapBarEnabled, forKey: Self.topSnapBarEnabledKey)
             if !isTopSnapBarEnabled {
                 snapLayoutBar.dismiss(animated: false)
+                snapEngine.cancelPendingOperations()
+                if isZoneFromLayoutBar { clearSnapSelection() }
             }
         }
     }
 
-    /// Controls whether dragging a window to screen edges and corners triggers snapping.
     public var isEdgeSnapEnabled: Bool = (UserDefaults.standard.object(forKey: edgeSnapEnabledKey) as? Bool) ?? true {
         didSet {
             UserDefaults.standard.set(isEdgeSnapEnabled, forKey: Self.edgeSnapEnabledKey)
+            if !isEdgeSnapEnabled {
+                snapEngine.cancelPendingOperations()
+                if !isZoneFromLayoutBar { clearSnapSelection() }
+            }
         }
     }
 
@@ -58,194 +58,124 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private let previewOverlay: PreviewOverlayWindow
     private let snapLayoutBar: SnapLayoutBarWindow
     private let snapEngine: WindowSnappingProtocol
+    private let pairingManager: PairedResizeManager
 
     public init(
         screenService: ScreenServiceProtocol = ScreenService.shared,
         accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared,
-        snapEngine: WindowSnappingProtocol = SnapEngine.shared
+        snapEngine: WindowSnappingProtocol = SnapEngine.shared,
+        pairingManager: PairedResizeManager = PairedResizeManager.shared
     ) {
         self.screenService = screenService
         self.accessibilityService = accessibilityService
         self.snapEngine = snapEngine
+        self.pairingManager = pairingManager
         self.previewOverlay = PreviewOverlayWindow()
         self.snapLayoutBar = SnapLayoutBarWindow()
     }
 
     public func startMonitoring() {
         guard eventTap == nil else { return }
-
+        resetDragInteraction()
+        monitoringGeneration &+= 1
+        let context = EventTapContext(monitor: self, generation: monitoringGeneration)
+        eventTapContext = context
         let mask = (1 << CGEventType.leftMouseDragged.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
-
-        let callback: CGEventTapCallBack = { proxy, type, event, userInfo in
-            guard let userInfo = userInfo else {
-                return Unmanaged.passRetained(event)
+        let callback: CGEventTapCallBack = { _, type, event, userInfo in
+            guard let userInfo else { return Unmanaged.passUnretained(event) }
+            let context = Unmanaged<EventTapContext>.fromOpaque(userInfo).takeUnretainedValue()
+            let point = event.location
+            let generation = context.generation
+            // Snapshot event-time coordinates; do not retain CGEvent across the actor hop.
+            Task { @MainActor [weak monitor = context.monitor] in
+                monitor?.handleCapturedEvent(type: type, atAXPoint: point, generation: generation)
             }
-            let monitor = Unmanaged<GlobalEventMonitor>.fromOpaque(userInfo).takeUnretainedValue()
-            Task { @MainActor in
-                monitor.handleEvent(type: type, event: event)
-            }
-            return Unmanaged.passRetained(event)
+            return Unmanaged.passUnretained(event)
         }
-
-        let observer = Unmanaged.passUnretained(self).toOpaque()
         eventTap = CGEvent.tapCreate(
-            tap: .cghidEventTap,
-            place: .headInsertEventTap,
-            options: .listenOnly,
-            eventsOfInterest: CGEventMask(mask),
-            callback: callback,
-            userInfo: observer
+            tap: .cghidEventTap, place: .headInsertEventTap, options: .listenOnly,
+            eventsOfInterest: CGEventMask(mask), callback: callback,
+            userInfo: Unmanaged.passUnretained(context).toOpaque()
         )
-
         guard let tap = eventTap else {
-            print("[GlobalEventMonitor] Warning: Unable to create CGEventTap. Please verify Accessibility permissions.")
+            eventTapContext = nil
+            print("[GlobalEventMonitor] Unable to create CGEventTap. Verify Accessibility permissions.")
             return
         }
-
-        runLoopSource = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), runLoopSource, .commonModes)
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
+            CFMachPortInvalidate(tap)
+            eventTap = nil
+            eventTapContext = nil
+            return
+        }
+        runLoopSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
         print("[GlobalEventMonitor] Drag monitoring active.")
     }
 
     public func stopMonitoring() {
-        self.previewOverlay.dismiss()
-        self.snapLayoutBar.dismiss(animated: false)
-        self.activeZone = nil
-        self.activeScreen = nil
-        self.isZoneFromLayoutBar = false
-        self.currentDraggedWindow = nil
-        self.dragStartPoint = nil
-        self.isHoldingWindowOrTab = false
-        self.isDragGestureIgnored = false
-
+        // Queued callbacks from the previous registration must not restart a stopped gesture.
+        monitoringGeneration &+= 1
+        resetDragInteraction()
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
-            if let source = runLoopSource {
-                CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-            }
-            eventTap = nil
-            runLoopSource = nil
+            if let source = runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
+            CFMachPortInvalidate(tap)
         }
+        eventTap = nil
+        runLoopSource = nil
+        eventTapContext = nil
     }
 
-    private func handleEvent(type: CGEventType, event: CGEvent) {
-        guard isMasterEnabled else {
-            if snapLayoutBar.presentationState != .hidden {
-                snapLayoutBar.dismiss(animated: false)
-            }
-            if previewOverlay.isVisible {
-                previewOverlay.dismiss()
+    private func handleCapturedEvent(type: CGEventType, atAXPoint point: CGPoint, generation: UInt64) {
+        guard generation == monitoringGeneration, eventTap != nil else { return }
+        let cocoaPoint = ScreenGeometry.axPointToCocoa(
+            axPoint: point, primaryScreenHeight: screenService.primaryScreenHeight
+        )
+        handleEvent(type: type, atCocoaPoint: cocoaPoint)
+    }
+
+    /// Internal event seam: tests use the same gesture and placement path as native capture.
+    func handleEvent(type: CGEventType, atCocoaPoint point: CGPoint) {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            resetDragInteraction(ignoringUntilRelease: recognition.window != nil || recognition.isIgnored)
+            if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
+            return
+        }
+        // A release must terminate ignored gestures even while paused or using the divider.
+        if type == .leftMouseUp {
+            if !isMasterEnabled || pairingManager.isDraggingDivider {
+                resetDragInteraction()
+            } else {
+                handleRelease(at: point)
             }
             return
         }
-
-        let mouseLocation = NSEvent.mouseLocation
-
-        // If user is currently dragging an interactive resize divider, completely suppress
-        // the top Snap Bar modal and snap previews so they never get in the way.
-        if PairedResizeManager.shared.isDraggingDivider {
-            if snapLayoutBar.presentationState != .hidden {
-                snapLayoutBar.dismiss(animated: false)
-            }
-            if previewOverlay.isVisible {
-                previewOverlay.dismiss()
-            }
-            self.activeZone = nil
-            self.currentDraggedWindow = nil
-            self.dragStartPoint = nil
-            self.isHoldingWindowOrTab = false
-            self.isDragGestureIgnored = false
+        guard type == .leftMouseDragged else { return }
+        guard isMasterEnabled, !pairingManager.isDraggingDivider else {
+            resetDragInteraction(ignoringUntilRelease: true)
             return
         }
-
-        switch type {
-        case .leftMouseDragged:
-            handleDrag(at: mouseLocation)
-        case .leftMouseUp:
-            handleRelease()
-        default:
-            break
-        }
+        handleDrag(at: point)
     }
 
     private func handleDrag(at point: CGPoint) {
-        // If this drag sequence was already determined to start in an invalid zone
-        // (e.g. In-app editor body, desktop wallpaper, menu bar, or dock), ignore all remaining drag events until mouseUp
-        if isDragGestureIgnored {
+        guard let screen = screenService.screenContaining(point: point) else {
+            resetDragInteraction(ignoringUntilRelease: true)
             return
         }
-
-        guard let screen = screenService.screenContaining(point: point) else { return }
-
-        // Capture and validate the dragged window at the exact start of movement
-        if currentDraggedWindow == nil {
-            // Layer 1: Exclude Menu Bar and Dock.
-            // In Cocoa coordinates, point.y >= screen.visibleFrame.maxY - 1.0 is in the Menu Bar,
-            // and !screen.visibleFrame.contains(point) covers Dock or off-screen coordinates.
-            let visibleFrame = screen.visibleFrame
-            if !visibleFrame.contains(point) || point.y >= (visibleFrame.maxY - 1.0) {
-                isDragGestureIgnored = true
-                return
-            }
-
-            guard let primaryScreen = screenService.primaryScreen ?? NSScreen.screens.first else {
-                isDragGestureIgnored = true
-                return
-            }
-            let primaryHeight = primaryScreen.frame.height
-
-            // Layer 2: Hit-test the actual element under the cursor position.
-            // This prevents attributing clicks on empty desktop to the last focused application.
-            let axPoint = ScreenGeometry.cocoaPointToAX(cocoaPoint: point, primaryScreenHeight: primaryHeight)
-            var candidateWindow = accessibilityService.getWindowUnderPoint(axPoint)
-
-            // Fallback: If getWindowUnderPoint didn't resolve (e.g. non-standard custom element),
-            // allow focused window ONLY IF the cursor is physically inside the focused window's frame.
-            if candidateWindow == nil,
-               let focused = accessibilityService.getFocusedWindow(),
-               let focusedFrame = focused.cocoaFrame(primaryScreenHeight: primaryHeight),
-               focusedFrame.contains(point) {
-                candidateWindow = focused
-            }
-
-            guard let targetWindow = candidateWindow else {
-                isDragGestureIgnored = true
-                return
-            }
-
-            // Layer 3: Exclude Desktop wallpaper (AXDesktopWindow) and MacSnap's own interface windows.
-            if targetWindow.isDesktopWindow || targetWindow.pid == ProcessInfo.processInfo.processIdentifier {
-                isDragGestureIgnored = true
-                return
-            }
-
-            // Layer 4: Validate that the click started strictly in the upper header / tab bar region.
-            // Grabbing or selecting in the window body (editor text, buttons, web content) must NEVER trigger snapping.
-            guard targetWindow.isPointInHeaderRegion(point, primaryScreenHeight: primaryHeight) else {
-                isDragGestureIgnored = true
-                return
-            }
-
-            currentDraggedWindow = targetWindow
-            dragStartPoint = point
+        let began = recognition.drag(at: point, visibleFrame: screen.visibleFrame) {
+            resolveCandidate(at: point)
         }
-
-        // Layer 5: Intentional drag threshold.
-        // Requires a deliberate 14pt movement before activating the Snap Layout Bar or snap zones,
-        // preventing micro-jitter from simple clicks on tabs or window controls.
-        let dragDist = hypot(point.x - (dragStartPoint?.x ?? point.x), point.y - (dragStartPoint?.y ?? point.y))
-        let dragThreshold: CGFloat = 14.0
-        if !isHoldingWindowOrTab && dragDist >= dragThreshold && currentDraggedWindow != nil {
-            isHoldingWindowOrTab = true
-            if let window = currentDraggedWindow {
-                PairedResizeManager.shared.unpairWindow(window)
-            }
+        if began {
+            snapEngine.cancelPendingOperations()
+            if let window = recognition.window { pairingManager.unpairWindow(window) }
         }
-
+        guard recognition.isDragging, let window = recognition.window else { return }
         // When dragging a window, immediately present the collapsed Apple Glass pill
         // at the top of the monitor where the cursor currently is, tracking display switches
-        if isHoldingWindowOrTab && isTopSnapBarEnabled {
+        if isTopSnapBarEnabled {
             if snapLayoutBar.presentationState == .hidden {
                 snapLayoutBar.presentPill(on: screen)
             } else if snapLayoutBar.currentScreen != screen {
@@ -256,7 +186,6 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
 
         // Only evaluate hover on SnapLayoutBar and screen edges when the user is actively
         // dragging a window or tab past the intentional movement threshold.
-        guard isHoldingWindowOrTab else { return }
 
         let visibleFrame = screen.visibleFrame
         let edgeThreshold: CGFloat = 20.0
@@ -343,58 +272,78 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             self.activeScreen = screen
             self.isZoneFromLayoutBar = isFromLayoutBar
 
-            // Intelligent dynamic preview:
-            // When choosing from the layout bar modal, strictly display the exact card slot geometry ("tamanho certo").
-            // For edge snapping, calculate flush boundary if a genuine partner exists.
-            let targetRect: CGRect
-            if !isFromLayoutBar, let flush = PairedResizeManager.shared.calculateFlushTargetRect(for: zone, screen: screen, windowToExclude: currentDraggedWindow) {
-                targetRect = flush.targetRect
-            } else {
-                targetRect = zone.targetRect(for: visibleFrame)
-            }
+            let targetRect = snapEngine.previewRect(
+                for: window, to: zone, on: screen, forceExactSize: isFromLayoutBar
+            )
 
             self.previewOverlay.present(at: targetRect, animated: true)
         } else {
-            if self.activeZone != nil {
-                self.activeZone = nil
-                self.activeScreen = nil
-                self.isZoneFromLayoutBar = false
-                self.previewOverlay.dismiss()
-            }
+            clearSnapSelection()
         }
     }
 
-    private func handleRelease() {
-        self.previewOverlay.dismiss()
-        self.snapLayoutBar.dismiss()
-
-        if self.isHoldingWindowOrTab, let zone = self.activeZone, let window = self.currentDraggedWindow {
-            let targetScreen = self.activeScreen ?? self.screenService.screenContaining(point: NSEvent.mouseLocation)
-
-            if let screen = targetScreen {
-                let fromModal = self.isZoneFromLayoutBar
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
-                    self?.snapEngine.snapWindow(window, to: zone, on: screen, forceExactSize: fromModal)
-                    // Settlement pass: verify and ensure pairing for any adjacent windows (including same application)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                        PairedResizeManager.shared.autoDetectAdjacentWindows(on: screen)
-                    }
-                }
-            }
-        } else if self.isHoldingWindowOrTab {
-            // Window was dragged and dropped: check if it was placed adjacent to an existing window (including same app)
-            let currentScreen = self.screenService.screenContaining(point: NSEvent.mouseLocation)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-                PairedResizeManager.shared.autoDetectAdjacentWindows(on: currentScreen)
-            }
+    private func resolveCandidate(at point: CGPoint) -> DragRecognition<WindowElement>.Candidate? {
+        let primaryHeight = screenService.primaryScreenHeight
+        guard primaryHeight > 0 else { return nil }
+        let axPoint = ScreenGeometry.cocoaPointToAX(cocoaPoint: point, primaryScreenHeight: primaryHeight)
+        var window = accessibilityService.getWindowUnderPoint(axPoint)
+        var frame: CGRect?
+        if window == nil,
+           let focused = accessibilityService.getFocusedWindow(),
+           let focusedFrame = focused.cocoaFrame(primaryScreenHeight: primaryHeight),
+           focusedFrame.contains(point) {
+            window = focused
+            frame = focusedFrame
         }
+        guard let window,
+              let frame = frame ?? window.cocoaFrame(primaryScreenHeight: primaryHeight) else { return nil }
+        return .init(
+            window: window, frame: frame, isDesktop: window.isDesktopWindow,
+            isOwnWindow: window.pid == ProcessInfo.processInfo.processIdentifier
+        )
+    }
 
-        self.activeZone = nil
-        self.activeScreen = nil
-        self.isZoneFromLayoutBar = false
-        self.currentDraggedWindow = nil
-        self.dragStartPoint = nil
-        self.isHoldingWindowOrTab = false
-        self.isDragGestureIgnored = false
+    private func handleRelease(at point: CGPoint) {
+        // A retained NSScreen is not proof that its display is still connected.
+        if let activeScreen,
+           !screenService.screens.contains(where: { $0.displayID == activeScreen.displayID }) {
+            resetDragInteraction()
+            return
+        }
+        let released = recognition.release()
+        let zone = activeZone
+        let screen = activeScreen ?? screenService.screenContaining(point: point)
+        let exact = isZoneFromLayoutBar
+        clearSnapSelection()
+        snapLayoutBar.dismiss()
+        if released.wasDragging {
+            snapEngine.completeDrag(window: released.window, zone: zone, screen: screen, forceExactSize: exact)
+        }
+    }
+
+    private func clearSnapSelection() {
+        activeZone = nil
+        activeScreen = nil
+        isZoneFromLayoutBar = false
+        previewOverlay.dismiss()
+    }
+
+    private func resetDragInteraction(ignoringUntilRelease: Bool = false) {
+        recognition.reset(ignoringUntilRelease: ignoringUntilRelease)
+        clearSnapSelection()
+        snapLayoutBar.dismiss(animated: false)
+        snapEngine.cancelPendingOperations()
+    }
+}
+
+/// Owned by the monitor for exactly the lifetime of a tap registration.
+/// The callback borrows this immutable registration and captures only its values into the task.
+private final class EventTapContext {
+    weak var monitor: GlobalEventMonitor?
+    let generation: UInt64
+
+    init(monitor: GlobalEventMonitor, generation: UInt64) {
+        self.monitor = monitor
+        self.generation = generation
     }
 }
