@@ -1,10 +1,14 @@
 # MacSnap website
 
-Buildless public landing page, in Brazilian Portuguese. Host only this directory with GitHub Pages, at `https://viniciuslidington.github.io/MacSnap/`.
+Static public landing page. English is the default at `https://viniciuslidington.github.io/MacSnap/`; Brazilian Portuguese is available at `/MacSnap/pt/`. Host only this directory with GitHub Pages.
 
 ## Validate and preview
 
-Run `python3 scripts/check-site.py` from the repository root. Serve `site/` with a static HTTP server for visual checks. Also test it under the `/MacSnap/` path before publishing. No dependency installation or bundler is required.
+Edit the shared markup in `website/template.html` and the copy in `website/locales/en.json` and `website/locales/pt-BR.json`. Run `python3 scripts/build-site-locales.py` to regenerate both HTML pages and the sitemap; do not edit the generated HTML directly. The generator escapes text, validates translation keys and embeds localized interaction messages as inert JSON.
+
+Run `python3 scripts/check-site.py` from the repository root. It checks that the generated files are current and validates both routes, language links, metadata, assets and interaction copy. Serve `site/` with a static HTTP server for visual checks. Also test it under the `/MacSnap/` path before publishing. No dependency installation or bundler is required.
+
+The EN/PT links work without JavaScript and keep the current section when JavaScript is enabled. The chosen language is represented in the URL and survives a reload; no cookies, browser-language redirects or local storage are used. Both pages have their own canonical URL, language metadata and social image, with reciprocal `hreflang` links.
 
 `Website` validates pull requests and deploys only from main through its own workflow. The application release workflow and app version remain separate.
 
@@ -18,7 +22,7 @@ Clean-profile installation validation remains pending. Before claiming it has be
 
 ## Sharing
 
-The social image is `assets/social-preview.png` (1200 × 630). The title, description and Open Graph metadata are in `index.html`. After publishing, check the URL with LinkedIn's Post Inspector to refresh its cached preview.
+Social images are `assets/social-preview.png` (English) and `assets/social-preview-pt.png` (Portuguese), both 1200 × 630. Page titles, descriptions and Open Graph metadata come from the locale source files. The PNGs are separately rendered compositions; the locale generator does not rebuild them. After publishing, check each URL with LinkedIn's Post Inspector to refresh its cached preview.
 
 Fonts are self-hosted with their OFL notices. No analytics, forms or runtime API requests are included. Download links use the latest GitHub Release; avoid hard-coding a version number into the landing page.
 
