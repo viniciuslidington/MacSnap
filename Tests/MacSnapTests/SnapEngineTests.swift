@@ -8,8 +8,18 @@ import Testing
 @Suite(.serialized)
 struct SnapEngineTests {
     @Test func exactAndAdaptiveIntentsUseTheSamePolicyForPreviewAndPlacement() throws {
+        let savedPreference = UserDefaults.standard.object(forKey: "MacSnap.isDividerEnabled")
+        defer {
+            if let savedPreference {
+                UserDefaults.standard.set(savedPreference, forKey: "MacSnap.isDividerEnabled")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "MacSnap.isDividerEnabled")
+            }
+        }
+        // A user's disabled divider preference must not disable this enabled-flow fixture.
+        UserDefaults.standard.set(false, forKey: "MacSnap.isDividerEnabled")
         let f = try Fixture()
-        defer { f.manager.clearPairing() }
+        defer { f.cleanup() }
         let bounds = f.screen.visibleFrame
         let neighbor = f.window(CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width * 0.65, height: bounds.height))
         let moving = f.window(bounds)
@@ -31,7 +41,7 @@ struct SnapEngineTests {
 
     @Test func placementRefreshesObservationsAndFailedWritesDoNotRegister() throws {
         let f = try Fixture()
-        defer { f.manager.clearPairing() }
+        defer { f.cleanup() }
         let bounds = f.screen.visibleFrame
         let neighbor = f.window(CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width * 0.65, height: bounds.height))
         let moving = f.window(bounds)
@@ -54,7 +64,7 @@ struct SnapEngineTests {
 
     @Test func threeColumnsAreNotConvertedToABinaryPair() throws {
         let f = try Fixture()
-        defer { f.manager.clearPairing() }
+        defer { f.cleanup() }
         let bounds = f.screen.visibleFrame
         let left = f.window(SnapZone.leftThird.targetRect(for: bounds))
         let center = f.window(bounds)
@@ -69,7 +79,7 @@ struct SnapEngineTests {
 
     @Test func cancelledDropCannotPlaceOrRediscoverEvenIfSchedulerDeliversIt() throws {
         let f = try Fixture()
-        defer { f.manager.clearPairing() }
+        defer { f.cleanup() }
         let moving = f.window(f.screen.visibleFrame)
         f.engine.completeDrag(window: moving.0, zone: .leftHalf, screen: f.screen, forceExactSize: true)
         #expect(moving.1.writes == 0)
@@ -88,7 +98,7 @@ struct SnapEngineTests {
 
     @Test func disconnectedDisplayCancelsDeferredPlacementAndDiscovery() throws {
         let f = try Fixture()
-        defer { f.manager.clearPairing() }
+        defer { f.cleanup() }
         let moving = f.window(f.screen.visibleFrame)
         f.engine.completeDrag(window: moving.0, zone: .leftHalf, screen: f.screen, forceExactSize: true)
         f.screens.screens = []
@@ -100,7 +110,7 @@ struct SnapEngineTests {
 
     @Test func explicitSnapSupersedesADelayedDrop() throws {
         let f = try Fixture()
-        defer { f.manager.clearPairing() }
+        defer { f.cleanup() }
         let moving = f.window(f.screen.visibleFrame)
         f.engine.completeDrag(window: moving.0, zone: .leftHalf, screen: f.screen, forceExactSize: true)
         f.engine.snapWindow(moving.0, to: .rightHalf, on: f.screen, forceExactSize: true)
@@ -121,6 +131,43 @@ struct SnapEngineTests {
         let roundedSecond = CGRect(x: 150, y: 0, width: 851, height: 1000)
         #expect(PairGeometry.split(first: roundedFirst, second: roundedSecond, in: oddFrame)?.ratio == 0.15)
     }
+
+    @Test func adaptivePlacementFitsLeftTopBottomAndBetweenTwoNeighbors() throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let b = f.screen.visibleFrame
+        let cases: [(SnapZone, [CGRect], CGRect)] = [
+            (.leftHalf,
+             [CGRect(x: b.minX + b.width * 0.35, y: b.minY, width: b.width * 0.65, height: b.height)],
+             CGRect(x: b.minX, y: b.minY, width: b.width * 0.35, height: b.height)),
+            (.topHalf,
+             [CGRect(x: b.minX, y: b.minY, width: b.width, height: b.height * 0.55)],
+             CGRect(x: b.minX, y: b.minY + b.height * 0.55, width: b.width, height: b.height * 0.45)),
+            (.bottomHalf,
+             [CGRect(x: b.minX, y: b.minY + b.height * 0.35, width: b.width, height: b.height * 0.65)],
+             CGRect(x: b.minX, y: b.minY, width: b.width, height: b.height * 0.35)),
+            (.centerThird,
+             [CGRect(x: b.minX, y: b.minY, width: b.width * 0.35, height: b.height),
+              CGRect(x: b.minX + b.width * 0.65, y: b.minY, width: b.width * 0.35, height: b.height)],
+             CGRect(x: b.minX + b.width * 0.35, y: b.minY, width: b.width * 0.30, height: b.height))
+        ]
+        for (zone, neighbors, expected) in cases {
+            f.manager.clearPairing()
+            let moving = f.window(b)
+            let stationary = neighbors.map { f.window($0) }
+            f.discovery.windows = stationary.map(\.0)
+            let preview = f.engine.previewRect(for: moving.0, to: zone, on: f.screen, forceExactSize: false)
+            f.engine.snapWindow(moving.0, to: zone, on: f.screen)
+            let placed = try #require(moving.0.cocoaFrame(primaryScreenHeight: f.height))
+            for result in [preview, placed] {
+                #expect(abs(result.minX - expected.minX) < 0.001)
+                #expect(abs(result.minY - expected.minY) < 0.001)
+                #expect(abs(result.width - expected.width) < 0.001)
+                #expect(abs(result.height - expected.height) < 0.001)
+            }
+            #expect(stationary.allSatisfy { $0.1.writes == 0 })
+        }
+    }
 }
 
 @MainActor
@@ -132,15 +179,27 @@ private final class Fixture {
     let manager: PairedResizeManager
     let clock = SnapClock()
     let engine: SnapEngine
+    private let previousDividerPreference: Any?
 
     init() throws {
         _ = NSApplication.shared
         screen = try #require(NSScreen.screens.first)
         height = screen.frame.height
+        previousDividerPreference = UserDefaults.standard.object(forKey: "MacSnap.isDividerEnabled")
+        UserDefaults.standard.set(true, forKey: "MacSnap.isDividerEnabled")
         screens = SnapScreens(screen: screen)
         discovery = SnapScene(primaryHeight: height)
         manager = PairedResizeManager(screenService: screens, windowDiscovery: discovery, isMasterEnabled: { true })
         engine = SnapEngine(screenService: screens, pairingManager: manager, discovery: discovery, scheduler: clock)
+    }
+
+    func cleanup() {
+        manager.clearPairing()
+        if let previousDividerPreference {
+            UserDefaults.standard.set(previousDividerPreference, forKey: "MacSnap.isDividerEnabled")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "MacSnap.isDividerEnabled")
+        }
     }
 
     func window(_ cocoa: CGRect) -> (WindowElement, SnapFrames) {
