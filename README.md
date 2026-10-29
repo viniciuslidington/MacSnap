@@ -7,6 +7,8 @@
 [![Architecture](https://img.shields.io/badge/Architecture-Universal%20(Apple%20Silicon%20%2B%20Intel)-purple)](https://developer.apple.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
+[Explore the MacSnap website](https://viniciuslidington.github.io/MacSnap/) for an overview, installation guidance and the latest download.
+
 ---
 
 ## ⚡ Quick Command-Line Installation

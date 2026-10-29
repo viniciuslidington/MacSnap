@@ -1,0 +1,568 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f5f0" />
+    <title>MacSnap — Suas janelas, no lugar certo.</title>
+    <meta
+      name="description"
+      content="Um utilitário nativo em Swift para organizar janelas no macOS. Escolha layouts, encaixe pelas bordas e ajuste duas janelas juntas pelo divisor. Gratuito e de código aberto."
+    />
+    <link rel="canonical" href="https://viniciuslidington.github.io/MacSnap/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="MacSnap" />
+    <meta
+      property="og:title"
+      content="MacSnap — Suas janelas, no lugar certo."
+    />
+    <meta
+      property="og:description"
+      content="Layouts de encaixe e redimensionamento pareado. Um pequeno utilitário nativo para o seu Mac, gratuito e de código aberto."
+    />
+    <meta
+      property="og:url"
+      content="https://viniciuslidington.github.io/MacSnap/"
+    />
+    <meta
+      property="og:image"
+      content="https://viniciuslidington.github.io/MacSnap/assets/social-preview.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="MacSnap. Suas janelas, no lugar certo. Para macOS, Intel e Apple Silicon."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="MacSnap — Suas janelas, no lugar certo."
+    />
+    <meta
+      name="twitter:description"
+      content="Organize o espaço de trabalho no macOS com um utilitário nativo, gratuito e de código aberto."
+    />
+    <meta
+      name="twitter:image"
+      content="https://viniciuslidington.github.io/MacSnap/assets/social-preview.png"
+    />
+    <link rel="icon" href="assets/icon-128.png" type="image/png" />
+    <link rel="apple-touch-icon" href="assets/icon.png" />
+    <link
+      rel="preload"
+      href="assets/fonts/newsreader-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      href="assets/fonts/dm-sans-latin.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+    <header class="site-header wrap">
+      <a class="brand" href="#inicio" aria-label="MacSnap, início"
+        ><img src="assets/icon-128.png" width="40" height="40" alt="" /><span
+          >MacSnap<span class="brand-period">.</span></span
+        ></a
+      >
+      <nav aria-label="Navegação principal">
+        <a href="#como-funciona">Como funciona</a>
+        <a href="#instalar">Instalar</a>
+        <a
+          class="nav-github"
+          href="https://github.com/viniciuslidington/MacSnap"
+          >GitHub <span aria-hidden="true">↗</span></a
+        >
+      </nav>
+      <a
+        class="button button-small header-download"
+        href="https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip"
+        >Baixar <span class="desktop-label">para macOS</span
+        ><svg aria-hidden="true" viewBox="0 0 20 20">
+          <path d="M10 3v10m-4-4 4 4 4-4M4 14v3h12v-3" /></svg
+      ></a>
+    </header>
+    <main id="conteudo">
+      <section class="hero wrap" id="inicio" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <p class="eyebrow">
+            <span class="status-dot" aria-hidden="true"></span> UM PEQUENO
+            UTILITÁRIO PARA MACOS
+          </p>
+          <h1 id="hero-title">Suas janelas,<br />no <em>lugar certo.</em></h1>
+          <p class="hero-description">
+            Um espaço de trabalho que faz sentido. Escolha um layout, encaixe
+            suas janelas e ajuste duas de uma vez com um simples divisor.
+          </p>
+          <div class="hero-actions">
+            <a
+              class="button"
+              href="https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip"
+              >Baixar para macOS<svg aria-hidden="true" viewBox="0 0 20 20">
+                <path d="M10 3v10m-4-4 4 4 4-4M4 14v3h12v-3" /></svg></a
+            ><a class="text-link" href="#como-funciona"
+              >Conheça o app <span aria-hidden="true">↓</span></a
+            >
+          </div>
+          <p class="compatibility">
+            macOS 13+ <span aria-hidden="true">/</span> Intel e Apple Silicon
+          </p>
+          <p class="hero-note">Gratuito. Código aberto. Feito em Swift.</p>
+        </div>
+        <figure class="hero-product" aria-labelledby="hero-caption">
+          <div class="workspace-art" aria-hidden="true">
+            <div class="workspace-top">
+              <span class="window-dots"><i></i><i></i><i></i></span
+              ><span>Um lugar para cada ideia.</span
+              ><span class="workspace-time">9:41</span>
+            </div>
+            <div class="workspace-windows">
+              <div class="paper-window">
+                <div class="paper-bar">Notas</div>
+                <div class="paper-inner">
+                  <span class="paper-eyebrow">IDEIAS PARA HOJE</span
+                  ><span class="paper-heading"
+                    >Menos ajustes.<br />Mais espaço.</span
+                  ><span class="paper-line"></span
+                  ><span class="paper-line short"></span
+                  ><span class="paper-line"></span
+                  ><span class="paper-line medium"></span>
+                  <div class="paper-box"></div>
+                </div>
+              </div>
+              <div class="empty-window">
+                <div class="paper-bar">Seu próximo projeto</div>
+                <div class="empty-lines">
+                  <span></span><span></span><span></span><span></span>
+                </div>
+              </div>
+            </div>
+            <span class="seam-mark"></span>
+          </div>
+          <div class="native-menu">
+            <img
+              src="assets/menu-native.png"
+              width="620"
+              height="808"
+              alt="Controles nativos do MacSnap: Quick Snap com Left, Right, Max e Center, e opções de layouts, encaixe e divisor pareado."
+              fetchpriority="high"
+            />
+          </div>
+          <span class="product-annotation" aria-hidden="true"
+            >À mão, na<br /><em>barra de menus.</em
+            ><svg viewBox="0 0 80 36">
+              <path d="M4 30c29 0 51-8 64-23m-13 1 15-3-1 14" /></svg
+          ></span>
+          <figcaption id="hero-caption">
+            Interface nativa do MacSnap em uma composição ilustrativa.
+          </figcaption>
+        </figure>
+      </section>
+
+      <div class="intro-strip wrap">
+        <p>Um jeito mais simples de dividir a tela.</p>
+        <div>
+          <span>100% Swift</span><span>Nativo do macOS</span
+          ><a
+            href="https://github.com/viniciuslidington/MacSnap/blob/main/LICENSE"
+            >Licença MIT <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </div>
+
+      <section
+        class="layouts-section wrap section-space"
+        id="como-funciona"
+        aria-labelledby="layouts-title"
+      >
+        <div class="section-heading">
+          <p class="eyebrow">
+            01 <span aria-hidden="true">/</span> CADA JANELA NO SEU ESPAÇO
+          </p>
+          <div class="heading-row">
+            <h2 id="layouts-title">
+              Uma tela.<br /><em>Muitas possibilidades.</em>
+            </h2>
+            <p>
+              Arraste uma janela para revelar a barra de layouts. Escolha uma
+              posição e deixe o MacSnap cuidar do encaixe.
+            </p>
+          </div>
+        </div>
+        <figure class="layouts-capture">
+          <div class="layout-label">
+            <span class="small-cross" aria-hidden="true">+</span
+            ><span>A BARRA APARECE QUANDO VOCÊ PRECISA</span>
+          </div>
+          <img
+            src="assets/layouts-native.png"
+            width="1360"
+            height="188"
+            alt="Barra de layouts nativa do MacSnap com opções de duas colunas, três colunas, proporções assimétricas, quadrantes e maximização."
+            loading="lazy"
+          />
+          <figcaption>
+            Captura da interface nativa, com um espaço selecionado para
+            demonstração.
+          </figcaption>
+        </figure>
+        <ul class="layout-types" aria-label="Exemplos de layouts">
+          <li>
+            <span class="mini-layout halves" aria-hidden="true"
+              ><i></i><i></i></span
+            ><span>Metades</span>
+          </li>
+          <li>
+            <span class="mini-layout thirds" aria-hidden="true"
+              ><i></i><i></i><i></i></span
+            ><span>Terços</span>
+          </li>
+          <li>
+            <span class="mini-layout asymmetric" aria-hidden="true"
+              ><i></i><i></i></span
+            ><span>Do seu jeito</span>
+          </li>
+          <li>
+            <span class="mini-layout quarters" aria-hidden="true"
+              ><i></i><i></i><i></i><i></i></span
+            ><span>Quadrantes</span>
+          </li>
+        </ul>
+        <p class="section-footnote">
+          Prefere ir direto? Arraste para as bordas ou use Left, Right, Max e
+          Center no menu.
+        </p>
+      </section>
+
+      <section
+        class="paired-section section-space"
+        aria-labelledby="paired-title"
+      >
+        <div class="wrap paired-grid">
+          <div class="paired-copy">
+            <p class="eyebrow">
+              02 <span aria-hidden="true">/</span> DOIS ESPAÇOS, UMA DIVISÃO
+            </p>
+            <h2 id="paired-title">
+              Ajuste uma.<br /><em>A outra acompanha.</em>
+            </h2>
+            <p>
+              Quando duas janelas formam um par, o divisor permite mudar a
+              proporção entre elas. Arraste para visualizar. Solte para aplicar
+              o novo tamanho.
+            </p>
+            <p class="quiet">Mais espaço para o que você está fazendo agora.</p>
+          </div>
+          <figure class="pair-figure">
+            <div
+              class="pair-diagram"
+              role="img"
+              aria-label="Esquema de duas janelas lado a lado com uma divisão de aproximadamente dois terços e um terço"
+            >
+              <div class="pair-first">
+                <span class="diagram-title">Seu trabalho</span>
+                <div class="diagram-heading">Espaço<br />para criar.</div>
+                <div class="diagram-lines"><i></i><i></i><i></i></div>
+              </div>
+              <div class="pair-divider">
+                <span><i></i><i></i></span>
+              </div>
+              <div class="pair-second">
+                <span class="diagram-title">Sua referência</span>
+                <div class="reference-sheet"><i></i><i></i><i></i><i></i></div>
+              </div>
+              <span class="ratio-caption"
+                >2/3 <span aria-hidden="true">↔</span> 1/3</span
+              >
+            </div>
+            <figcaption>
+              Esquema de divisão pareada. O ajuste acontece no aplicativo.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section
+        class="screens-section wrap section-space"
+        aria-labelledby="screens-title"
+      >
+        <p class="eyebrow">
+          03 <span aria-hidden="true">/</span> O SEU ESPAÇO DE TRABALHO
+        </p>
+        <div class="screens-grid">
+          <div class="screen-drawing" aria-hidden="true">
+            <div class="landscape-screen">
+              <div><i></i><i></i></div>
+            </div>
+            <div class="portrait-screen">
+              <div><i></i><i></i><i></i></div>
+            </div>
+            <span class="screen-ground"></span>
+          </div>
+          <div>
+            <h2 id="screens-title">
+              Na horizontal.<br /><em>Ou em outra perspectiva.</em>
+            </h2>
+            <p>
+              Layouts para telas horizontais e verticais, com pares mantidos por
+              monitor. Organize cada tela de acordo com o seu trabalho.
+            </p>
+            <p class="quiet">
+              Alguns aplicativos têm tamanhos mínimos de janela que podem
+              limitar certos encaixes.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="install-section section-space"
+        id="instalar"
+        aria-labelledby="install-title"
+      >
+        <div class="wrap">
+          <div class="heading-row">
+            <div>
+              <p class="eyebrow">PRONTO PARA EXPERIMENTAR?</p>
+              <h2 id="install-title">
+                Um pequeno app.<br /><em>Um novo espaço.</em>
+              </h2>
+            </div>
+            <a
+              class="button"
+              href="https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip"
+              >Baixar para macOS<svg aria-hidden="true" viewBox="0 0 20 20">
+                <path d="M10 3v10m-4-4 4 4 4-4M4 14v3h12v-3" /></svg
+            ></a>
+          </div>
+          <ol class="install-steps">
+            <li>
+              <span class="step-number">01</span>
+              <h3>Baixe e extraia.</h3>
+              <p>
+                Baixe o ZIP da release e extraia o <strong>MacSnap.app</strong>.
+              </p>
+            </li>
+            <li>
+              <span class="step-number">02</span>
+              <h3>Leve para Aplicativos.</h3>
+              <p>
+                Mova o app para a pasta Aplicativos e abra o MacSnap. Ele fica
+                na barra de menus.
+              </p>
+            </li>
+            <li>
+              <span class="step-number">03</span>
+              <h3>Permita Acessibilidade.</h3>
+              <p>
+                Em Ajustes do Sistema → Privacidade e Segurança →
+                Acessibilidade, autorize o MacSnap a organizar as janelas.
+              </p>
+            </li>
+          </ol>
+          <aside class="installation-note" aria-labelledby="install-note-title">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z" />
+              <path d="m9 12 2 2 4-4" />
+            </svg>
+            <div>
+              <h3 id="install-note-title">Uma distribuição independente.</h3>
+              <p>
+                A versão atual tem assinatura ad-hoc e não é notarizada pela
+                Apple. O macOS pode apresentar um aviso ao abrir. Confira a
+                <a href="https://support.apple.com/pt-br/102445"
+                  >orientação oficial da Apple</a
+                >
+                e abra somente aplicativos de fontes em que você confia.
+              </p>
+              <p class="small-note">
+                O fluxo de instalação em um perfil novo ainda está em validação.
+                Se precisar de ajuda,
+                <a href="https://github.com/viniciuslidington/MacSnap/issues"
+                  >conte o que aconteceu</a
+                >.
+              </p>
+            </div>
+          </aside>
+          <p class="release-fallback">
+            O download não começou?
+            <a
+              href="https://github.com/viniciuslidington/MacSnap/releases/latest"
+              >Abra a página da release <span aria-hidden="true">↗</span></a
+            >
+          </p>
+          <details class="terminal-install">
+            <summary>Prefere instalar pelo Terminal?</summary>
+            <p>
+              O instalador baixa o app, configura o início de sessão e abre os
+              ajustes de Acessibilidade. Você pode
+              <a
+                href="https://github.com/viniciuslidington/MacSnap/blob/main/install.sh"
+                >ler o script antes de executar</a
+              >.
+            </p>
+            <div class="code-box">
+              <!-- prettier-ignore -->
+              <code id="install-command">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/viniciuslidington/MacSnap/main/install.sh)"</code>
+              <button type="button" data-copy-command hidden>
+                Copiar comando
+              </button>
+            </div>
+            <p class="copy-status" role="status" aria-live="polite"></p>
+          </details>
+        </div>
+      </section>
+
+      <section
+        class="about-section wrap section-space"
+        aria-labelledby="about-title"
+      >
+        <div class="about-grid">
+          <div>
+            <p class="eyebrow">PEQUENO NO ESCOPO. ABERTO POR ESCOLHA.</p>
+            <h2 id="about-title">
+              Feito em Swift.<br /><em>Compartilhado com você.</em>
+            </h2>
+          </div>
+          <div class="about-copy">
+            <p>
+              O MacSnap é um projeto pessoal de Vinicius Lidington para explorar
+              desenvolvimento nativo no macOS e tornar a organização de janelas
+              mais prática.
+            </p>
+            <p>
+              O código está aberto: você pode conhecer a implementação,
+              acompanhar as mudanças ou contribuir com uma ideia.
+            </p>
+            <div class="about-links">
+              <a
+                class="text-link"
+                href="https://github.com/viniciuslidington/MacSnap"
+                >Explore o código <span aria-hidden="true">↗</span></a
+              ><a
+                class="text-link"
+                href="https://github.com/viniciuslidington/MacSnap/blob/main/docs/architecture/native-window-study.md"
+                >Leia o estudo técnico <span aria-hidden="true">↗</span></a
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section
+        class="faq-section wrap section-space"
+        id="duvidas"
+        aria-labelledby="faq-title"
+      >
+        <div>
+          <p class="eyebrow">ANTES DE COMEÇAR</p>
+          <h2 id="faq-title">Algumas<br /><em>respostas.</em></h2>
+          <p>
+            Ficou alguma dúvida?<br /><a
+              href="https://github.com/viniciuslidington/MacSnap/issues"
+              >Converse pelo GitHub <span aria-hidden="true">↗</span></a
+            >
+          </p>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>Quais Macs são compatíveis?</summary>
+            <p>
+              O pacote é universal, com executáveis para Intel e Apple Silicon,
+              e tem macOS 13 como requisito mínimo. O comportamento de encaixe
+              pode variar conforme o aplicativo e a configuração das telas.
+            </p>
+          </details>
+          <details>
+            <summary>O MacSnap é gratuito?</summary>
+            <p>
+              Sim. O download é gratuito e o código está disponível sob a
+              <a
+                href="https://github.com/viniciuslidington/MacSnap/blob/main/LICENSE"
+                >licença MIT</a
+              >.
+            </p>
+          </details>
+          <details>
+            <summary>Por que ele pede Acessibilidade?</summary>
+            <p>
+              O macOS exige essa permissão para que o MacSnap possa consultar,
+              posicionar e redimensionar janelas de outros aplicativos. Você
+              pode gerenciar a autorização nos Ajustes do Sistema.
+            </p>
+          </details>
+          <details>
+            <summary>Como faço para atualizar?</summary>
+            <p>
+              Confira a
+              <a
+                href="https://github.com/viniciuslidington/MacSnap/releases/latest"
+                >release mais recente</a
+              >, encerre o MacSnap que estiver aberto e substitua o aplicativo
+              em Aplicativos pela nova cópia. O botão de download desta página
+              aponta sempre para o pacote da release mais recente.
+            </p>
+          </details>
+          <details>
+            <summary>E se uma janela não encaixar como esperado?</summary>
+            <p>
+              Alguns aplicativos impõem tamanhos mínimos ou restrições ao
+              redimensionamento. Se encontrar um problema,
+              <a href="https://github.com/viniciuslidington/MacSnap/issues"
+                >abra uma issue</a
+              >
+              com a versão do macOS, o aplicativo envolvido e os passos para
+              reproduzir, sem incluir documentos ou dados pessoais.
+            </p>
+          </details>
+        </div>
+      </section>
+
+      <section class="closing-section wrap" aria-labelledby="closing-title">
+        <div class="closing-mark" aria-hidden="true">
+          <span></span><span></span>
+        </div>
+        <p class="eyebrow">UM LUGAR PARA CADA COISA</p>
+        <h2 id="closing-title">
+          Abra espaço<br />para o que <em>importa.</em>
+        </h2>
+        <a
+          class="button"
+          href="https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip"
+          >Experimente o MacSnap <span aria-hidden="true">↗</span></a
+        >
+        <p>Para o seu Mac. De código aberto.</p>
+      </section>
+    </main>
+    <footer class="site-footer wrap">
+      <a class="brand" href="#inicio"
+        ><img src="assets/icon-128.png" width="30" height="30" alt="" /><span
+          >MacSnap.</span
+        ></a
+      >
+      <p>
+        Um projeto de
+        <a href="https://github.com/viniciuslidington">Vinicius Lidington</a>.
+      </p>
+      <nav aria-label="Links do projeto">
+        <a href="https://github.com/viniciuslidington/MacSnap">GitHub</a
+        ><a href="https://github.com/viniciuslidington/MacSnap/releases"
+          >Releases</a
+        ><a
+          href="https://github.com/viniciuslidington/MacSnap/blob/main/LICENSE"
+          >Licença MIT</a
+        >
+      </nav>
+    </footer>
+  </body>
+</html>
