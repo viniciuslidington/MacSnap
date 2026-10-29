@@ -204,16 +204,140 @@
             <span class="small-cross" aria-hidden="true">+</span
             ><span>A BARRA APARECE QUANDO VOCÊ PRECISA</span>
           </div>
-          <img
-            src="assets/layouts-native.png"
-            width="1360"
-            height="188"
-            alt="Barra de layouts nativa do MacSnap com opções de duas colunas, três colunas, proporções assimétricas, quadrantes e maximização."
-            loading="lazy"
-          />
-          <figcaption>
-            Captura da interface nativa, com um espaço selecionado para
-            demonstração.
+          <div class="layout-stage" data-layout-demo>
+            <div class="layout-backdrop" aria-hidden="true">
+              <span></span><i></i><i></i><i></i>
+            </div>
+            <button
+              class="layout-trigger"
+              type="button"
+              aria-label="Mostrar layouts de encaixe"
+              aria-expanded="true"
+              aria-controls="layout-panel"
+              hidden
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 12">
+                <rect x="0.5" y="0.5" width="10" height="11" rx="2" />
+                <rect x="13.5" y="0.5" width="10" height="11" rx="2" />
+              </svg>
+              <span aria-hidden="true"
+                ><svg viewBox="0 0 9 6"><path d="m1 1 3.5 4L8 1" /></svg
+              ></span>
+            </button>
+            <div class="layout-panel" id="layout-panel">
+              <div
+                class="layout-playground"
+                role="group"
+                aria-label="Experimente os espaços dos layouts"
+              >
+                <div class="layout-template" role="group" aria-label="Metades">
+                  <button
+                    type="button"
+                    aria-label="Metade esquerda"
+                    aria-pressed="false"
+                  ></button>
+                  <button
+                    type="button"
+                    aria-label="Metade direita"
+                    aria-pressed="false"
+                  ></button>
+                </div>
+                <div
+                  class="layout-template template-thirds"
+                  role="group"
+                  aria-label="Terços"
+                >
+                  <button
+                    type="button"
+                    aria-label="Terço esquerdo"
+                    aria-pressed="false"
+                  ></button>
+                  <button
+                    type="button"
+                    aria-label="Terço central"
+                    aria-pressed="false"
+                  ></button>
+                  <button
+                    type="button"
+                    aria-label="Terço direito"
+                    aria-pressed="false"
+                  ></button>
+                </div>
+                <div
+                  class="layout-template template-wide-left"
+                  role="group"
+                  aria-label="Dois terços à esquerda"
+                >
+                  <button
+                    type="button"
+                    aria-label="Dois terços à esquerda"
+                    aria-pressed="false"
+                  ></button>
+                  <button
+                    type="button"
+                    aria-label="Um terço à direita"
+                    aria-pressed="false"
+                  ></button>
+                </div>
+                <div
+                  class="layout-template template-wide-right"
+                  role="group"
+                  aria-label="Dois terços à direita"
+                >
+                  <button
+                    type="button"
+                    aria-label="Um terço à esquerda"
+                    aria-pressed="false"
+                  ></button>
+                  <button
+                    type="button"
+                    aria-label="Dois terços à direita"
+                    aria-pressed="false"
+                  ></button>
+                </div>
+                <div
+                  class="layout-template template-quarters"
+                  role="group"
+                  aria-label="Quadrantes"
+                >
+                  <button
+                    type="button"
+                    aria-label="Quadrante superior esquerdo"
+                    aria-pressed="false"
+                  ></button>
+                  <button
+                    type="button"
+                    aria-label="Quadrante superior direito"
+                    aria-pressed="false"
+                  ></button>
+                  <button
+                    type="button"
+                    aria-label="Quadrante inferior esquerdo"
+                    aria-pressed="false"
+                  ></button>
+                  <button
+                    type="button"
+                    aria-label="Quadrante inferior direito"
+                    aria-pressed="false"
+                  ></button>
+                </div>
+                <div
+                  class="layout-template template-max"
+                  role="group"
+                  aria-label="Maximizar"
+                >
+                  <button
+                    type="button"
+                    aria-label="Janela maximizada"
+                    aria-pressed="false"
+                  ></button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <figcaption data-layout-caption aria-live="polite">
+            Passe o mouse ou toque para explorar. Demonstração ilustrativa dos
+            layouts.
           </figcaption>
         </figure>
         <ul class="layout-types" aria-label="Exemplos de layouts">
@@ -266,8 +390,8 @@
           <figure class="pair-figure" data-pair-demo>
             <div
               class="pair-diagram"
-              role="img"
-              aria-label="Esquema de duas janelas lado a lado com uma divisão de aproximadamente dois terços e um terço"
+              role="group"
+              aria-label="Demonstração de divisão entre duas janelas"
             >
               <div class="pair-first">
                 <span class="diagram-title">Seu trabalho</span>
@@ -275,27 +399,36 @@
                 <div class="diagram-lines"><i></i><i></i><i></i></div>
               </div>
               <div class="pair-divider">
-                <span><i></i><i></i></span>
+                <span data-static-divider aria-hidden="true"
+                  ><i></i><i></i
+                ></span>
+                <button
+                  class="pair-handle"
+                  data-pair-handle
+                  type="button"
+                  role="slider"
+                  aria-label="Ajustar divisão entre as janelas"
+                  aria-orientation="horizontal"
+                  aria-valuemin="40"
+                  aria-valuemax="70"
+                  aria-valuenow="65"
+                  aria-describedby="pair-demo-hint"
+                  hidden
+                >
+                  <i></i><i></i>
+                </button>
               </div>
               <div class="pair-second">
                 <span class="diagram-title">Sua referência</span>
                 <div class="reference-sheet"><i></i><i></i><i></i><i></i></div>
               </div>
-              <span class="ratio-caption" data-pair-ratio
+              <span class="ratio-caption" data-pair-ratio aria-hidden="true"
                 >2/3 <span aria-hidden="true">↔</span> 1/3</span
               >
             </div>
-            <div class="pair-controls" hidden>
-              <label for="pair-ratio">Experimente a divisão</label>
-              <input
-                id="pair-ratio"
-                type="range"
-                min="40"
-                max="70"
-                value="65"
-                aria-describedby="pair-demo-caption"
-              />
-            </div>
+            <p class="pair-hint" id="pair-demo-hint" hidden>
+              Arraste o divisor ou use as setas do teclado.
+            </p>
             <figcaption id="pair-demo-caption">
               Demonstração ilustrativa. No aplicativo, arraste o divisor entre
               as janelas.
@@ -323,11 +456,17 @@
           </div>
           <div>
             <h2 id="screens-title">
-              Na horizontal.<br /><em>Ou em outra perspectiva.</em>
+              Na vertical.<br /><em>Uma acima da outra.</em>
             </h2>
             <p>
-              Layouts para telas horizontais e verticais, com pares mantidos por
-              monitor. Organize cada tela de acordo com o seu trabalho.
+              O macOS já oferece encaixes em metades e quadrantes. Para
+              aproveitar a altura de um monitor vertical, o MacSnap também
+              oferece terços: topo, meio e base.
+            </p>
+            <p>
+              Editor no topo, navegador no meio, referência na base. Escolha a
+              posição de cada janela e mantenha as três visíveis, uma acima da
+              outra.
             </p>
             <p class="quiet">
               Alguns aplicativos têm tamanhos mínimos de janela que podem
@@ -397,13 +536,6 @@
                 >
                 e abra somente aplicativos de fontes em que você confia.
               </p>
-              <p class="small-note">
-                O fluxo de instalação em um perfil novo ainda está em validação.
-                Se precisar de ajuda,
-                <a href="https://github.com/viniciuslidington/MacSnap/issues"
-                  >conte o que aconteceu</a
-                >.
-              </p>
             </div>
           </aside>
           <p class="release-fallback">
@@ -414,7 +546,16 @@
             >
           </p>
           <details class="terminal-install">
-            <summary>Prefere instalar pelo Terminal?</summary>
+            <summary>
+              <span class="terminal-icon" aria-hidden="true">›_</span>
+              <span
+                ><strong>Prefere instalar pelo Terminal?</strong
+                ><span class="terminal-subtitle"
+                  >Veja o comando de instalação.</span
+                ></span
+              >
+              <span class="terminal-chevron" aria-hidden="true">+</span>
+            </summary>
             <p>
               O instalador baixa o app, configura o início de sessão e abre os
               ajustes de Acessibilidade. Você pode
@@ -487,6 +628,16 @@
           </p>
         </div>
         <div class="faq-list">
+          <details>
+            <summary>Por que construí o MacSnap?</summary>
+            <p>
+              Depois de usar outros sistemas operacionais, senti falta de alguns
+              detalhes na organização de janelas do macOS. Encontrei aplicativos
+              que resolvem isso, mas com recursos completos disponíveis apenas
+              em versões pagas. Isso me motivou a criar um app nativo, gratuito
+              e de código aberto, inicialmente para meu uso pessoal.
+            </p>
+          </details>
           <details>
             <summary>Quais Macs são compatíveis?</summary>
             <p>
