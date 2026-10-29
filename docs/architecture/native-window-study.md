@@ -80,6 +80,14 @@ Preservamos o início observado no primeiro evento de arraste. Passar a capturar
 - Observadores devem ter um dono e remoção explícita no término. Usar o notificationCenter do workspace para eventos de ativação. [NSWorkspace, Apple](https://developer.apple.com/documentation/appkit/nsworkspace/didactivateapplicationnotification).
 - Evitar singleton consultado por dentro de uma dependência já injetada: isso impede que um teste controle a operação inteira.
 
+### Compatibilidade dos argumentos padrão com Swift 6.1
+
+O primeiro CI no Xcode 16.4 falhou antes dos testes: o compilador Swift 6.1.2 encerrava durante a geração dos inicializadores estáticos de `PairedResizeManager` e `SnapEngine`. Um exemplo mínimo reproduziu a combinação de argumentos padrão isolados no MainActor, um `nil` intermediário e outro argumento padrão. A falha corresponde ao [problema corrigido no compilador Swift](https://github.com/swiftlang/swift/pull/81370).
+
+A correção mantém o `init` no MainActor e resolve ali o scheduler e a closure de estado quando esses argumentos são omitidos. Por exemplo, `scheduler: nil` vira `MainActorScheduler.shared` dentro do inicializador; um scheduler fornecido pelo teste continua sendo usado. Isso evita duplicar todos os argumentos nas propriedades `shared` e protege também outros chamadores do inicializador padrão. O custo é aceitar `nil` como escolha explícita da dependência padrão nesses dois parâmetros; o comportamento padrão continua o mesmo.
+
+O projeto completo passou os mesmos **81 testes** com o toolchain oficial Swift.org 6.1.2 e SDK 15.4, usando um diretório de build separado. Esse toolchain reproduz a família da falha, mas seu identificador difere do compilador Apple incluído no Xcode 16.4; o CI continua sendo a verificação dessa combinação exata.
+
 ## Verificação e limites
 
 1. Rodar a linha de base antes das mudanças; rodar testes focados de cada module e a suíte integrada após a integração.

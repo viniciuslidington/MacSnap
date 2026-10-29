@@ -68,12 +68,14 @@ public final class PairedResizeManager {
         accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared,
         scheduler: any ActionScheduling = MainActorScheduler.shared,
         windowDiscovery: (any WindowDiscovering)? = nil,
-        isMasterEnabled: @escaping @MainActor () -> Bool = { GlobalEventMonitor.shared.isMasterEnabled }
+        isMasterEnabled: (@MainActor () -> Bool)? = nil
     ) {
         self.screenService = screenService
         self.windowDiscovery = windowDiscovery ?? NativeWindowDiscovery(accessibilityService: accessibilityService)
         self.scheduler = scheduler
-        self.isMasterEnabled = isMasterEnabled
+        // Resolve this default inside the actor: Swift 6.1 mis-lowers isolated
+        // defaults followed by nil and another default argument (swiftlang/swift#81370).
+        self.isMasterEnabled = isMasterEnabled ?? { GlobalEventMonitor.shared.isMasterEnabled }
         self.observedPrimaryScreenHeight = screenService.primaryScreenHeight
     }
 

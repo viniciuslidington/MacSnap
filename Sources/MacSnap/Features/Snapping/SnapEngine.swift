@@ -17,13 +17,14 @@ public final class SnapEngine: WindowSnappingProtocol {
         screenService: ScreenServiceProtocol = ScreenService.shared,
         pairingManager: PairedResizeManager = PairedResizeManager.shared,
         discovery: (any WindowDiscovering)? = nil,
-        scheduler: any ActionScheduling = MainActorScheduler.shared
+        scheduler: (any ActionScheduling)? = nil
     ) {
         self.accessibilityService = accessibilityService
         self.screenService = screenService
         self.pairingManager = pairingManager
         self.discovery = discovery ?? NativeWindowDiscovery(accessibilityService: accessibilityService)
-        self.scheduler = scheduler
+        // Resolve the actor-isolated default here to support Swift 6.1 (#81370).
+        self.scheduler = scheduler ?? MainActorScheduler.shared
     }
 
     public func snapFocusedWindow(to zone: SnapZone) {
