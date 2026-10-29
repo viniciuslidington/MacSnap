@@ -92,24 +92,31 @@ Sources/MacSnap/
 │   ├── Models/
 │   │   ├── SnapZone.swift               # Enums and geometric math for snap zones
 │   │   ├── ScreenGeometry.swift         # Cocoa <-> Accessibility API coordinate conversion
-│   │   ├── WindowElement.swift          # Type-safe wrapper over AXUIElement with anti-clamp sizing
-│   │   └── PairedSplit.swift            # Mathematical model for paired window splits and ratios
+│   │   ├── WindowElement.swift          # Window identity and frame access wrapper
+│   │   ├── PairedSplit.swift            # Paired window geometry, ratios, and ordered frame application
+│   │   └── PairGeometry.swift           # Shared pair adjacency and alignment checks
 │   └── Protocols/
-│       └── Protocols.swift              # Protocol contracts and abstractions for dependency injection
+│       ├── Protocols.swift              # Service contracts for dependency injection
+│       └── ActionScheduling.swift       # Cancelable delayed work on the main actor
 │
 ├── Services/
 │   ├── Accessibility/
-│   │   └── AccessibilityService.swift   # Accessibility API bridge (HIServices) with 5-level fallback
+│   │   ├── AccessibilityService.swift   # Accessibility API bridge and focused-window fallback
+│   │   ├── WindowDiscovery.swift        # Visible observations and AX identity reconciliation
+│   │   └── WindowFrameAccess.swift      # Validated native frame reads and writes
 │   ├── Screen/
 │   │   └── ScreenService.swift          # Screen discovery, orientation, and visible frames
 │   └── EventMonitoring/
-│       └── GlobalEventMonitor.swift     # Global mouse event tracking via CGEventTap
+│       ├── GlobalEventMonitor.swift     # CGEventTap lifecycle and snap presentation
+│       └── DragRecognition.swift        # Drag admission, movement threshold, and rejection state
 │
 └── Features/
     ├── Snapping/
-    │   └── SnapEngine.swift             # Core snapping engine and window repositioning
+    │   ├── SnapEngine.swift             # Snap placement and pending-operation ownership
+    │   └── SnapTargetResolver.swift     # Shared exact-slot and adaptive snap intent
     ├── Pairing/
-    │   └── PairedResizeManager.swift    # Multi-monitor paired window and divider manager
+    │   ├── PairedResizeManager.swift    # Per-display pairs, discovery, and divider presentation
+    │   └── PairedResizeSession.swift    # Resize gesture, ordered writes, and observed settlement
     └── UI/
         ├── SnapLayoutBarWindow.swift        # Apple Glass floating layout bar (Pill and Expanded)
         ├── PreviewOverlayWindow.swift       # Translucent snap preview overlay window
@@ -171,3 +178,12 @@ macOS requires **Accessibility** permission so that MacSnap can query dimensions
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for details.
+
+
+## Architecture study and local validation
+
+The native window refactoring is documented in [the architecture study](docs/architecture/native-window-study.md), including alternatives, trade-offs, isolation, native adapters, and test limits. The [domain glossary](CONTEXT.md) defines windows, snap intent, pairs, gestures, and observations.
+
+Run `swift test` for geometry, drag recognition/event integration, snap intent and cancellation, window discovery/identity, paired resize settlement, and menu interactions. Tests use scripted frame/observation adapters and controlled time; they do not demonstrate every third-party application's native response.
+
+Build the separate local test app with `./scripts/build-development-app.sh` and follow [the manual test checklist](docs/architecture/manual-test.md) to validate native interactions. This does not replace the installed app, change the bundle version, or publish a release.

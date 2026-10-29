@@ -5,13 +5,36 @@ import Cocoa
 
 /// Encapsulates a macOS window retrieved via the Accessibility API (`AXUIElement`).
 /// Provides safe, strongly typed methods to query and modify size and position.
+/// The wrapper is immutable; its frame adapter is Sendable. The unchecked conformance
+/// bridges the imported immutable CF handle, not mutable Swift window state.
 public final class WindowElement: @unchecked Sendable, Identifiable {
     public let rawElement: AXUIElement
     public let pid: pid_t
+    private let frameAccess: any WindowFrameAccess
+    private let scriptedIdentity: UUID?
 
     public init(element: AXUIElement, pid: pid_t) {
         self.rawElement = element
         self.pid = pid
+        self.frameAccess = AXWindowFrameAccess(element: element)
+        self.scriptedIdentity = nil
+    }
+
+    /// Internal injection keeps native AX handles out of deterministic frame tests.
+    init(element: AXUIElement, pid: pid_t, frameAccess: any WindowFrameAccess, identity: UUID? = nil) {
+        self.rawElement = element
+        self.pid = pid
+        self.frameAccess = frameAccess
+        self.scriptedIdentity = identity
+    }
+
+    /// Process identity alone cannot distinguish two windows owned by the same application.
+    public func isSameWindow(as other: WindowElement) -> Bool {
+        guard pid == other.pid else { return false }
+        if scriptedIdentity != nil || other.scriptedIdentity != nil {
+            return scriptedIdentity != nil && scriptedIdentity == other.scriptedIdentity
+        }
+        return CFEqual(rawElement, other.rawElement)
     }
 
     /// Window title (or nil if inaccessible).
@@ -63,22 +86,8 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
 
     /// Returns the window frame in Accessibility API coordinates.
     public var axFrame: CGRect? {
-        var posValue: CFTypeRef?
-        var sizeValue: CFTypeRef?
-
-        guard AXUIElementCopyAttributeValue(rawElement, kAXPositionAttribute as CFString, &posValue) == .success,
-              AXUIElementCopyAttributeValue(rawElement, kAXSizeAttribute as CFString, &sizeValue) == .success,
-              let posVal = posValue, let sizeVal = sizeValue else {
-            return nil
-        }
-
-        var point = CGPoint.zero
-        var size = CGSize.zero
-
-        AXValueGetValue(posVal as! AXValue, .cgPoint, &point)
-        AXValueGetValue(sizeVal as! AXValue, .cgSize, &size)
-
-        return CGRect(origin: point, size: size)
+        guard let frame = frameAccess.frame, AXWindowFrameAccess.isUsable(frame) else { return nil }
+        return frame
     }
 
     /// Returns the window frame converted to Cocoa coordinates.
@@ -93,49 +102,8 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
     /// - Returns: Bool indicating whether the update was accepted.
     @discardableResult
     public func setAXFrame(_ newAXFrame: CGRect) -> Bool {
-        var point = newAXFrame.origin
-        var size = newAXFrame.size
-
-        guard let posValue = AXValueCreate(.cgPoint, &point),
-              let sizeValue = AXValueCreate(.cgSize, &size) else {
-            return false
-        }
-
-        // Multi-pass anti-clamping:
-        // On macOS, the ordering between position and size is critical:
-        // If size is set while the window is still at an old position, the WindowServer
-        // clamps the size against the current screen boundary before moving, causing truncated windows.
-        // Applying position -> size -> position -> size guarantees both expanding and shrinking
-        // windows reach the exact target frame without truncation.
-
-        // Pass 1: Move to target position first to clear expansion headroom
-        let posRes1 = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
-        let sizeRes1 = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
-
-        if posRes1 == .apiDisabled || sizeRes1 == .apiDisabled {
-            print("[MacSnap] ❌ ACCESSIBILITY ERROR: kAXErrorAPIDisabled when resizing PID \(pid).")
-            print("[MacSnap] 💡 Please enable MacSnap in System Settings > Privacy & Security > Accessibility.")
-            return false
-        }
-
-        // Pass 2: Reapply position and size to settle any clamped intermediate states
-        _ = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
-        _ = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
-
-        // Pass 3 (Verification): If actual frame deviates by > 4px, enforce final target
-        if let current = self.axFrame {
-            let dw = abs(current.width - newAXFrame.width)
-            let dh = abs(current.height - newAXFrame.height)
-            let dx = abs(current.origin.x - newAXFrame.origin.x)
-            let dy = abs(current.origin.y - newAXFrame.origin.y)
-
-            if dw > 4 || dh > 4 || dx > 4 || dy > 4 {
-                _ = AXUIElementSetAttributeValue(rawElement, kAXPositionAttribute as CFString, posValue)
-                _ = AXUIElementSetAttributeValue(rawElement, kAXSizeAttribute as CFString, sizeValue)
-            }
-        }
-
-        return true
+        guard AXWindowFrameAccess.isUsable(newAXFrame) else { return false }
+        return frameAccess.setFrame(newAXFrame)
     }
 
     /// Sets new position and size using Cocoa coordinates (internally converted to AX).
@@ -147,9 +115,7 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
 
     /// Checks if the window supports resizing.
     public var isResizable: Bool {
-        var isSettable: DarwinBoolean = false
-        let result = AXUIElementIsAttributeSettable(rawElement, kAXSizeAttribute as CFString, &isSettable)
-        return result == .success && isSettable.boolValue
+        frameAccess.isResizable
     }
 
     /// Determines if a point in Cocoa coordinates falls within the upper header/tab bar region of this window.

@@ -11,7 +11,7 @@ public enum SplitOrientation: Sendable {
 /// Represents a pair of snapped windows (similar to Windows Snap Assist).
 /// Supports both horizontal splits (Left/Right) and vertical splits (Top/Bottom),
 /// with magnetic snapping at common ratios and dynamic overlap prevention.
-public final class PairedSplit: @unchecked Sendable {
+public final class PairedSplit {
     public let firstWindow: WindowElement   // Left or Top window
     public let secondWindow: WindowElement  // Right or Bottom window
     public let orientation: SplitOrientation
@@ -130,34 +130,30 @@ public final class PairedSplit: @unchecked Sendable {
 
     /// Applies current split ratios to both windows using directional anti-collision ordering,
     /// ensuring shrinking windows release screen space before expanding windows resize.
-    public func applyCurrentSplit(primaryScreenHeight: CGFloat) {
+    @discardableResult
+    public func applyCurrentSplit(primaryScreenHeight: CGFloat) -> Bool {
         let (firstRect, secondRect) = calculateFrames()
+        guard primaryScreenHeight.isFinite && primaryScreenHeight > 0,
+              validFrame(firstRect), validFrame(secondRect),
+              let currentFirst = firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight),
+              let currentSecond = secondWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight),
+              validFrame(currentFirst), validFrame(currentSecond) else { return false }
 
-        switch orientation {
-        case .horizontal:
-            let currentFirstW = firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight)?.width ?? firstRect.width
-            if firstRect.width > currentFirstW {
-                // First is expanding, second is shrinking: move second first to clear space
-                secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
-                firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
-            } else {
-                // First is shrinking, second is expanding: shrink first first
-                firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
-                secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
-            }
-
-        case .vertical:
-            let currentFirstH = firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight)?.height ?? firstRect.height
-            if firstRect.height > currentFirstH {
-                // Top is expanding, bottom is shrinking: move bottom first to clear space
-                secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
-                firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
-            } else {
-                // Top is shrinking, bottom is expanding: shrink top first
-                firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
-                secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
-            }
+        let firstIsExpanding = orientation == .horizontal
+            ? firstRect.width > currentFirst.width
+            : firstRect.height > currentFirst.height
+        if firstIsExpanding {
+            // Do not expand into space that the other application refused to release.
+            guard secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight) else { return false }
+            return firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight)
         }
+        guard firstWindow.setCocoaFrame(firstRect, primaryScreenHeight: primaryScreenHeight) else { return false }
+        return secondWindow.setCocoaFrame(secondRect, primaryScreenHeight: primaryScreenHeight)
+    }
+
+    private func validFrame(_ frame: CGRect) -> Bool {
+        frame.origin.x.isFinite && frame.origin.y.isFinite &&
+            frame.width.isFinite && frame.height.isFinite && frame.width > 0 && frame.height > 0
     }
 
     /// Updates only the split ratio based on cursor drag with gentle magnetic snapping,
@@ -180,19 +176,7 @@ public final class PairedSplit: @unchecked Sendable {
 
     /// Updates the split ratio based on cursor drag with gentle magnetic snapping.
     public func updateRatioFromCursor(cursorCoordinate: CGFloat, primaryScreenHeight: CGFloat) {
-        var rawRatio: CGFloat
-
-        switch orientation {
-        case .horizontal:
-            let relativeX = cursorCoordinate - visibleFrame.origin.x
-            rawRatio = relativeX / visibleFrame.width
-        case .vertical:
-            let relativeY = cursorCoordinate - visibleFrame.origin.y
-            let bottomRatio = relativeY / visibleFrame.height
-            rawRatio = 1.0 - bottomRatio
-        }
-
-        self.ratio = applyMagneticSnap(rawRatio)
+        updateRatioOnly(from: cursorCoordinate)
         applyCurrentSplit(primaryScreenHeight: primaryScreenHeight)
     }
 

@@ -41,9 +41,24 @@ public protocol WindowSnappingProtocol: AnyObject {
 
     /// Applies a snap target zone to a specific window on a target display.
     func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool)
+    func previewRect(for window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool) -> CGRect
+    func completeDrag(window: WindowElement?, zone: SnapZone?, screen: NSScreen?, forceExactSize: Bool)
+    func cancelPendingOperations()
 }
 
 extension WindowSnappingProtocol {
+    public func previewRect(for window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool) -> CGRect {
+        zone.targetRect(for: screen.visibleFrame)
+    }
+
+    public func completeDrag(window: WindowElement?, zone: SnapZone?, screen: NSScreen?, forceExactSize: Bool) {
+        if let window, let zone, let screen {
+            snapWindow(window, to: zone, on: screen, forceExactSize: forceExactSize)
+        }
+    }
+
+    public func cancelPendingOperations() {}
+
     public func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen) {
         snapWindow(window, to: zone, on: screen, forceExactSize: false)
     }

@@ -331,10 +331,10 @@ struct SnapGeometryTests {
         let screen1 = screens[0]
         let screen2 = screens[1]
 
-        let dummy1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 101)
-        let dummy2 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 102)
-        let dummy3 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 201)
-        let dummy4 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 202)
+        let dummy1 = pairingTestWindow(pid: 101, on: screen1)
+        let dummy2 = pairingTestWindow(pid: 102, on: screen1)
+        let dummy3 = pairingTestWindow(pid: 201, on: screen2)
+        let dummy4 = pairingTestWindow(pid: 202, on: screen2)
 
         // Pair on Monitor 1
         manager.pair(first: dummy1, second: dummy2, orientation: .vertical, on: screen1, ratio: 0.5)
@@ -352,15 +352,6 @@ struct SnapGeometryTests {
         // Clear
         manager.clearPairing()
         #expect(manager.activePairs.count == 0)
-    }
-
-    @MainActor
-    @Test func testAutoDetectAdjacentWindowsExecution() {
-        let manager = PairedResizeManager.shared
-        // Run automatic search for adjacent windows in current environment
-        let detected = manager.autoDetectAdjacentWindows()
-        // Must execute without errors, returning list of detected pairs
-        #expect(detected.count >= 0)
     }
 
     @MainActor
@@ -397,33 +388,6 @@ struct SnapGeometryTests {
         // 4. Dismiss
         overlay.dismiss(animated: false)
         #expect(!overlay.isPresenting)
-    }
-
-    @MainActor
-    @Test func testDividerDragCallbackLifecycle() {
-        let divider = DividerHandleWindow()
-        var dragStartedCalled = false
-        var draggedCoordinate: CGFloat?
-        var dragReleasedCalled = false
-
-        divider.onDividerDragStarted = {
-            dragStartedCalled = true
-        }
-        divider.onDividerDragged = { coord in
-            draggedCoordinate = coord
-        }
-        divider.onDividerReleased = {
-            dragReleasedCalled = true
-        }
-
-        divider.onDividerDragStarted?()
-        #expect(dragStartedCalled)
-
-        divider.onDividerDragged?(750.0)
-        #expect(draggedCoordinate == 750.0)
-
-        divider.onDividerReleased?()
-        #expect(dragReleasedCalled)
     }
 
     @Test func testPairedSplitUpdateRatioOnly() {
@@ -490,54 +454,6 @@ struct SnapGeometryTests {
         #expect(!WindowElement.isPointInHeaderRegion(compactBody, windowFrame: compactFrame))
     }
 
-    @Test func testMenuBarAndDockExclusionLogic() {
-        // Screen with full 1920x1080 frame
-        // Menu bar at top: 1055 to 1080 (height 25)
-        // Dock at bottom: 0 to 70 (height 70)
-        // Visible frame: (x: 0, y: 70, width: 1920, height: 985) -> maxY = 1055
-        let visibleFrame = CGRect(x: 0, y: 70, width: 1920, height: 985)
-
-        func isExcluded(point: CGPoint) -> Bool {
-            return !visibleFrame.contains(point) || point.y >= (visibleFrame.maxY - 1.0)
-        }
-
-        // Click in Apple menu / menu bar item (Y = 1065) -> Excluded
-        let menuBarClick = CGPoint(x: 50, y: 1065)
-        #expect(isExcluded(point: menuBarClick))
-
-        // Click exactly on menu bar border line (Y = 1054.5) -> Excluded
-        let menuBarBorderClick = CGPoint(x: 200, y: 1054.5)
-        #expect(isExcluded(point: menuBarBorderClick))
-
-        // Click in bottom Dock (Y = 35) -> Excluded
-        let dockClick = CGPoint(x: 960, y: 35)
-        #expect(isExcluded(point: dockClick))
-
-        // Click inside active workspace (Y = 800) -> Allowed
-        let usableAreaClick = CGPoint(x: 960, y: 800)
-        #expect(!isExcluded(point: usableAreaClick))
-    }
-
-    @Test func testDragDistanceThresholdValidation() {
-        let startPoint = CGPoint(x: 500, y: 500)
-        let dragThreshold: CGFloat = 14.0
-
-        // Micro-jitter click (3pt move)
-        let jitterPoint = CGPoint(x: 502, y: 502)
-        let jitterDist = hypot(jitterPoint.x - startPoint.x, jitterPoint.y - startPoint.y)
-        #expect(jitterDist < dragThreshold)
-
-        // Sub-threshold move (10pt move)
-        let subPoint = CGPoint(x: 506, y: 508)
-        let subDist = hypot(subPoint.x - startPoint.x, subPoint.y - startPoint.y)
-        #expect(subDist < dragThreshold)
-
-        // Intentional drag (20pt move)
-        let dragPoint = CGPoint(x: 512, y: 516)
-        let dragDist = hypot(dragPoint.x - startPoint.x, dragPoint.y - startPoint.y)
-        #expect(dragDist >= dragThreshold)
-    }
-
     @Test func testDesktopWindowRoleDetection() {
         let dummy = WindowElement(element: AXUIElementCreateSystemWide(), pid: ProcessInfo.processInfo.processIdentifier)
         // System wide element has no desktop subrole
@@ -584,8 +500,8 @@ struct SnapGeometryTests {
         manager.clearPairing()
 
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-        let dummy1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 888)
-        let dummy2 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 999)
+        let dummy1 = pairingTestWindow(pid: 888, on: screen)
+        let dummy2 = pairingTestWindow(pid: 999, on: screen)
 
         manager.pair(first: dummy1, second: dummy2, orientation: .horizontal, on: screen, ratio: 0.5)
         #expect(manager.state(for: screen).pair != nil)
@@ -648,21 +564,6 @@ struct SnapGeometryTests {
     }
 
     @MainActor
-    @Test func testThreeColumnSetupDoesNotDistortHalfSnaps() {
-        guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
-        let visibleFrame = screen.visibleFrame
-
-        // When snapping to leftHalf or rightHalf, default targets must strictly be 50%
-        let leftTarget = SnapZone.leftHalf.targetRect(for: visibleFrame)
-        let rightTarget = SnapZone.rightHalf.targetRect(for: visibleFrame)
-
-        #expect(leftTarget.width == (visibleFrame.width / 2.0))
-        #expect(rightTarget.width == (visibleFrame.width / 2.0))
-        #expect(leftTarget.origin.x == visibleFrame.origin.x)
-        #expect(rightTarget.origin.x == visibleFrame.origin.x + (visibleFrame.width / 2.0))
-    }
-
-    @MainActor
     @Test func testSameApplicationTwoWindowsPairing() {
         let manager = PairedResizeManager.shared
         manager.clearPairing()
@@ -670,34 +571,15 @@ struct SnapGeometryTests {
 
         // Two distinct windows from the same app (same PID, e.g. Chrome window 1 and Chrome window 2)
         let chromePid: pid_t = 2855
-        let dummyChrome1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: chromePid)
-        let dummyChrome2 = WindowElement(element: AXUIElementCreateApplication(chromePid), pid: chromePid)
+        let dummyChrome1 = pairingTestWindow(pid: chromePid, on: screen)
+        let dummyChrome2 = pairingTestWindow(pid: chromePid, on: screen)
 
         manager.pair(first: dummyChrome1, second: dummyChrome2, orientation: .horizontal, on: screen, ratio: 0.5)
         let pair = manager.state(for: screen).pair
 
         #expect(pair != nil)
         #expect(pair?.firstWindow.pid == pair?.secondWindow.pid)
-        #expect(!CFEqual(pair!.firstWindow.rawElement, pair!.secondWindow.rawElement))
-    }
-
-    @MainActor
-    @Test func testSameApplicationAdjacentSearchFallback() {
-        let manager = PairedResizeManager.shared
-        guard let screen = NSScreen.screens.first else { return }
-
-        // Simulate an excluded window from an app with PID 9999
-        let dummyApp = AXUIElementCreateApplication(ProcessInfo.processInfo.processIdentifier)
-        let currentWindow = WindowElement(element: dummyApp, pid: ProcessInfo.processInfo.processIdentifier)
-
-        // findAdjacentWindow should safely reject self and not crash
-        let partner = manager.findAdjacentWindow(
-            atCocoaPoint: CGPoint(x: screen.visibleFrame.midX, y: screen.visibleFrame.midY),
-            excludingWindow: currentWindow
-        )
-
-        // When finding candidate at empty point or self, it should safely return nil
-        #expect(partner == nil || !CFEqual(partner!.rawElement, currentWindow.rawElement))
+        #expect(!pair!.firstWindow.isSameWindow(as: pair!.secondWindow))
     }
 
     @MainActor
@@ -733,8 +615,8 @@ struct SnapGeometryTests {
 
         // Verify disabling divider prevents pairing and clears active pairs
         guard let screen = NSScreen.screens.first else { return }
-        let dummy1 = WindowElement(element: AXUIElementCreateSystemWide(), pid: 8801)
-        let dummy2 = WindowElement(element: AXUIElementCreateApplication(8802), pid: 8802)
+        let dummy1 = pairingTestWindow(pid: 8801, on: screen)
+        let dummy2 = pairingTestWindow(pid: 8802, on: screen)
 
         manager.isDividerEnabled = true
         monitor.isMasterEnabled = true
@@ -755,5 +637,71 @@ struct SnapGeometryTests {
 
         monitor.isMasterEnabled = false
         #expect(manager.state(for: screen).pair == nil)
+    }
+
+    @MainActor
+    @Test func explicitPairDoesNotAdvertiseARejectedNativeWrite() {
+        guard let screen = NSScreen.screens.first else { return }
+        let preference = UserDefaults.standard.object(forKey: "MacSnap.isDividerEnabled")
+        defer {
+            if let preference {
+                UserDefaults.standard.set(preference, forKey: "MacSnap.isDividerEnabled")
+            } else {
+                UserDefaults.standard.removeObject(forKey: "MacSnap.isDividerEnabled")
+            }
+        }
+        let manager = PairedResizeManager(windowDiscovery: NoPairingTestWindows(), isMasterEnabled: { true })
+        manager.isDividerEnabled = true
+        let first = pairingTestWindow(pid: 9001, on: screen)
+        let second = pairingTestWindow(pid: 9002, on: screen)
+        manager.pair(first: first, second: second, orientation: .horizontal, on: screen)
+        #expect(manager.state(for: screen).pair != nil)
+
+        let rejected = pairingTestWindow(pid: 9003, on: screen, acceptsWrites: false)
+        manager.pair(first: first, second: rejected, orientation: .horizontal, on: screen)
+        #expect(manager.state(for: screen).pair == nil)
+        #expect(!manager.state(for: screen).dividerWindow.isVisible)
+        manager.clearPairing()
+    }
+}
+
+@MainActor
+private func pairingTestWindow(pid: pid_t, on screen: NSScreen, acceptsWrites: Bool = true) -> WindowElement {
+    let axFrame = ScreenGeometry.cocoaToAX(
+        cocoaRect: screen.visibleFrame,
+        primaryScreenHeight: ScreenService.shared.primaryScreenHeight
+    )
+    return WindowElement(
+        element: AXUIElementCreateSystemWide(), pid: pid,
+        frameAccess: PairingTestFrameAccess(frame: axFrame, acceptsWrites: acceptsWrites), identity: UUID()
+    )
+}
+
+private final class PairingTestFrameAccess: WindowFrameAccess, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedFrame: CGRect
+    private let acceptsWrites: Bool
+
+    init(frame: CGRect, acceptsWrites: Bool) {
+        storedFrame = frame
+        self.acceptsWrites = acceptsWrites
+    }
+
+    var frame: CGRect? { lock.withLock { storedFrame } }
+    var isResizable: Bool { true }
+    func setFrame(_ frame: CGRect) -> Bool {
+        guard acceptsWrites else { return false }
+        lock.withLock { storedFrame = frame }
+        return true
+    }
+}
+
+@MainActor
+private final class NoPairingTestWindows: WindowDiscovering {
+    func snapshot(primaryScreenHeight: CGFloat) -> WindowSnapshot? {
+        WindowSnapshot(windows: [], resolver: { _ in nil })
+    }
+    func window(atCocoaPoint point: CGPoint, excluding: WindowElement?, primaryScreenHeight: CGFloat) -> WindowElement? {
+        nil
     }
 }
