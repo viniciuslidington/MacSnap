@@ -171,3 +171,12 @@ macOS requires **Accessibility** permission so that MacSnap can query dimensions
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for details.
+
+
+## Architecture study and local validation
+
+The native window refactoring is documented in [the architecture study](docs/architecture/native-window-study.md), including alternatives, trade-offs, isolation, native adapters, and test limits.
+
+Run `swift test` for geometry, drag recognition/event integration, snap intent and cancellation, window discovery/identity, paired resize settlement, and menu interactions. Tests use scripted frame/observation adapters and controlled time; they do not demonstrate every third-party application's native response.
+
+Build the separate local test app with `./scripts/build-development-app.sh` and follow [the manual test checklist](docs/architecture/manual-test.md) to validate native interactions. This does not replace the installed app, change the bundle version, or publish a release.
