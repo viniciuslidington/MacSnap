@@ -19,3 +19,9 @@ The user approved publishing this version with these limitations disclosed. Befo
 The social image is `assets/social-preview.png` (1200 × 630). The title, description and Open Graph metadata are in `index.html`. After publishing, check the URL with LinkedIn's Post Inspector to refresh its cached preview.
 
 Fonts are self-hosted with their OFL notices. No analytics, forms or runtime API requests are included. Download links use the latest GitHub Release; avoid hard-coding a version number into the landing page.
+
+## Interactive illustrations
+
+Mouse movement adds a small depth effect to the hero layers and a neutral highlight to the layout capture. These effects run only with a fine pointer and no reduced-motion preference; leaving the artwork, switching tabs or changing that preference cancels pending frames and resets the artwork. There is no continuous animation loop or global pointer tracking.
+
+The paired-window illustration has a native range control for mouse, touch and keyboard. It changes only the illustration, labels the current percentages for assistive technology, and remains usable with reduced motion. Without JavaScript, the illustration stays static and the inactive control stays hidden.

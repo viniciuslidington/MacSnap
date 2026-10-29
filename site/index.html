@@ -263,7 +263,7 @@
             </p>
             <p class="quiet">Mais espaço para o que você está fazendo agora.</p>
           </div>
-          <figure class="pair-figure">
+          <figure class="pair-figure" data-pair-demo>
             <div
               class="pair-diagram"
               role="img"
@@ -281,12 +281,24 @@
                 <span class="diagram-title">Sua referência</span>
                 <div class="reference-sheet"><i></i><i></i><i></i><i></i></div>
               </div>
-              <span class="ratio-caption"
+              <span class="ratio-caption" data-pair-ratio
                 >2/3 <span aria-hidden="true">↔</span> 1/3</span
               >
             </div>
-            <figcaption>
-              Esquema de divisão pareada. O ajuste acontece no aplicativo.
+            <div class="pair-controls" hidden>
+              <label for="pair-ratio">Experimente a divisão</label>
+              <input
+                id="pair-ratio"
+                type="range"
+                min="40"
+                max="70"
+                value="65"
+                aria-describedby="pair-demo-caption"
+              />
+            </div>
+            <figcaption id="pair-demo-caption">
+              Demonstração ilustrativa. No aplicativo, arraste o divisor entre
+              as janelas.
             </figcaption>
           </figure>
         </div>
