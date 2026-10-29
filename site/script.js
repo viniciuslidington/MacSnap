@@ -1,4 +1,13 @@
 // Content and downloads work without JavaScript. Demos are progressive enhancements.
+const copy = JSON.parse(document.querySelector("#site-copy").textContent);
+const formatCopy = (message, values) =>
+  message.replace(/\{(\w+)\}/g, (token, key) => values[key] ?? token);
+// Each language is a real static page; keep the current section when switching.
+for (const link of document.querySelectorAll("[data-language-link]")) {
+  link.addEventListener("click", () => {
+    link.hash = window.location.hash;
+  });
+}
 const copyButton = document.querySelector("[data-copy-command]");
 const command = document.querySelector("#install-command");
 const copyStatus = document.querySelector(".copy-status");
@@ -17,12 +26,10 @@ if (
       await navigator.clipboard.writeText(
         command.textContent.replace(/\s+/g, " ").trim(),
       );
-      copyStatus.textContent =
-        "Comando copiado. Você pode conferir o script antes de executá-lo.";
-      copyButton.textContent = "Copiado";
+      copyStatus.textContent = copy.copySuccess;
+      copyButton.textContent = copy.copied;
     } catch {
-      copyStatus.textContent =
-        "Não foi possível copiar. Selecione o comando e copie manualmente.";
+      copyStatus.textContent = copy.copyFailure;
     } finally {
       copyButton.disabled = false;
     }
@@ -190,7 +197,7 @@ if (layoutDemo) {
     trigger.setAttribute("aria-expanded", String(open));
     trigger.setAttribute(
       "aria-label",
-      open ? "Recolher layouts de encaixe" : "Mostrar layouts de encaixe",
+      open ? copy.hideLayouts : copy.showLayouts,
     );
     panel.inert = !open;
     panel.setAttribute("aria-hidden", String(!open));
@@ -277,7 +284,9 @@ for (const button of layoutButtons) {
     for (const other of layoutButtons)
       other.setAttribute("aria-pressed", "false");
     button.setAttribute("aria-pressed", "true");
-    layoutCaption.textContent = `${button.getAttribute("aria-label")}. Demonstração ilustrativa dos layouts.`;
+    layoutCaption.textContent = formatCopy(copy.layoutSelected, {
+      label: button.getAttribute("aria-label"),
+    });
   });
 }
 
@@ -302,7 +311,7 @@ if (pairDemo) {
     handle.setAttribute("aria-valuenow", String(first));
     handle.setAttribute(
       "aria-valuetext",
-      `${first}% para o trabalho, ${second}% para a referência`,
+      formatCopy(copy.splitValue, { first, second }),
     );
     ratio.textContent = `${first}% ↔ ${second}%`;
   };

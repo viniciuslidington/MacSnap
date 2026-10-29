@@ -8,7 +8,8 @@ Generated on 2026-10-29. The PNGs are native AppKit **source renders**, not a sc
 | `icon-128.png` | 128 × 128 px | Same original icon |
 | `menu-native.png` | 620 × 808 px | Production `MenuHeaderView`, `QuickSnapSectionView`, `ControllersSectionView`, and `MenuFooterSectionView` |
 | `layouts-native.png` | 1360 × 188 px | Production `SnapLayoutBarView` in expanded landscape mode, with its first slot hovered programmatically |
-| `social-preview.png` | 1200 × 630 px | Browser-rendered editorial composition using the original icon, the native menu render and the self-hosted fonts below |
+| `social-preview.png` | 1200 × 630 px | English browser-rendered editorial composition using the original icon, the native menu render and the self-hosted fonts below |
+| `social-preview-pt.png` | 1200 × 630 px | Original Portuguese version of the same editorial composition |
 
 The native views were compiled from this checkout with Swift 6 into a temporary render harness outside the repository. The harness appended an entry point to a temporary copy of `MenuBarController.swift` to access its private section views, and otherwise compiled the unchanged production sources (excluding the app's normal `main.swift`). It created offscreen AppKit windows, used the Aqua appearance and `NSView.cacheDisplay` at 2× resolution, and wrote PNGs. No window was shown, no event monitor was started, no Accessibility prompt was requested, no user windows were moved, and no preferences were changed.
 
