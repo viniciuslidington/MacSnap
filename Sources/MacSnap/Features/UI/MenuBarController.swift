@@ -4,7 +4,7 @@ import ServiceManagement
 /// Controls the MacSnap status icon and Control Center-style menu in the macOS top menu bar (`NSStatusItem`).
 @MainActor
 public final class MenuBarController: NSObject, NSMenuDelegate {
-    private var statusItem: NSStatusItem?
+    private(set) var statusItem: NSStatusItem?
     private let accessibilityService: AccessibilityServiceProtocol
     private let snapEngine: WindowSnappingProtocol
     private let pairingManager: PairedResizeManager
@@ -34,7 +34,17 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     public func menuWillOpen(_ menu: NSMenu) {
+        resetMenuHoverState()
         refreshMenuState()
+    }
+
+    public func menuDidClose(_ menu: NSMenu) {
+        resetMenuHoverState()
+    }
+
+    private func resetMenuHoverState() {
+        quickSnapView?.resetHoverState()
+        controllersView?.resetHoverState()
     }
 
     private func setupStatusItem() {
@@ -180,7 +190,7 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
 
         // 6. System & Footer (Launch at Login NSSwitch + Version + Quit)
         let footerItem = NSMenuItem()
-        let versionString = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0.6"
+        let versionString = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0.7"
         let footer = MenuFooterSectionView(
             width: Self.menuWidth,
             isLaunchAtLogin: isLoginItemEnabled(),
@@ -498,22 +508,22 @@ private final class MenuHeaderView: NSView {
 
         if isMasterEnabled {
             statusPillLabel.stringValue = "Active"
-            statusPillLabel.textColor = NSColor.controlAccentColor
-            statusPillContainer.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
+            statusPillLabel.textColor = .labelColor
+            statusPillContainer.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.08).cgColor
         } else {
             statusPillLabel.stringValue = "Paused"
             statusPillLabel.textColor = NSColor.secondaryLabelColor
-            statusPillContainer.layer?.backgroundColor = NSColor.secondaryLabelColor.withAlphaComponent(0.16).cgColor
+            statusPillContainer.layer?.backgroundColor = NSColor.labelColor.withAlphaComponent(0.04).cgColor
         }
 
         if isAccessibilityGranted {
-            accessibilityDot.layer?.backgroundColor = NSColor.systemGreen.cgColor
+            accessibilityDot.layer?.backgroundColor = NSColor.secondaryLabelColor.cgColor
             accessibilityButton.title = "Accessibility Granted"
             accessibilityButton.contentTintColor = .secondaryLabelColor
         } else {
-            accessibilityDot.layer?.backgroundColor = NSColor.systemOrange.cgColor
+            accessibilityDot.layer?.backgroundColor = NSColor.labelColor.cgColor
             accessibilityButton.title = "Permission Required"
-            accessibilityButton.contentTintColor = .systemOrange
+            accessibilityButton.contentTintColor = .labelColor
         }
     }
 
@@ -530,12 +540,12 @@ private final class AppBadgeIconView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds, xRadius: 8.0, yRadius: 8.0)
         let gradient = NSGradient(
-            starting: NSColor(calibratedRed: 0.04, green: 0.52, blue: 1.0, alpha: 1.0),
-            ending: NSColor(calibratedRed: 0.0, green: 0.33, blue: 0.83, alpha: 1.0)
+            starting: NSColor.labelColor.withAlphaComponent(0.12),
+            ending: NSColor.labelColor.withAlphaComponent(0.05)
         )
         gradient?.draw(in: path, angle: -45)
 
-        NSColor.white.setStroke()
+        NSColor.labelColor.setStroke()
         let leftWindow = NSBezierPath(roundedRect: NSRect(x: 7.0, y: 8.5, width: 7.5, height: 15.0), xRadius: 1.8, yRadius: 1.8)
         leftWindow.lineWidth = 1.4
         leftWindow.stroke()
@@ -595,6 +605,10 @@ private final class QuickSnapSectionView: NSView {
         alphaValue = enabled ? 1.0 : 0.4
         tiles.forEach { $0.isEnabled = enabled }
     }
+
+    func resetHoverState() {
+        tiles.forEach { $0.resetHoverState() }
+    }
 }
 
 @MainActor
@@ -603,7 +617,12 @@ private final class QuickSnapTileButton: NSView {
     private let zone: SnapZone
     private let onClick: () -> Void
     private var isHovered = false
-    var isEnabled = true
+    var isEnabled = true {
+        didSet {
+            setAccessibilityEnabled(isEnabled)
+            if !isEnabled { resetHoverState() }
+        }
+    }
 
     init(frame: NSRect, title: String, zone: SnapZone, onClick: @escaping () -> Void) {
         self.title = title
@@ -611,6 +630,9 @@ private final class QuickSnapTileButton: NSView {
         self.onClick = onClick
         super.init(frame: frame)
         wantsLayer = true
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel(title)
     }
 
     required init?(coder: NSCoder) {
@@ -636,32 +658,36 @@ private final class QuickSnapTileButton: NSView {
     }
 
     override func mouseExited(with event: NSEvent) {
+        resetHoverState()
+    }
+
+    func resetHoverState() {
         isHovered = false
         needsDisplay = true
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard isEnabled else { return }
+        _ = accessibilityPerformPress()
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard isEnabled else { return false }
+        // Closing menu tracking need not send mouseExited to this view.
+        resetHoverState()
         onClick()
+        return true
     }
 
     override func draw(_ dirtyRect: NSRect) {
         let bgPath = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 9.0, yRadius: 9.0)
-        if isHovered && isEnabled {
-            NSColor.controlAccentColor.setFill()
-            bgPath.fill()
-            NSColor.white.withAlphaComponent(0.25).setStroke()
-            bgPath.lineWidth = 1.0
-            bgPath.stroke()
-        } else {
-            NSColor.labelColor.withAlphaComponent(0.06).setFill()
-            bgPath.fill()
-            NSColor.labelColor.withAlphaComponent(0.10).setStroke()
-            bgPath.lineWidth = 1.0
-            bgPath.stroke()
-        }
+        let highlighted = isHovered && isEnabled
+        NSColor.labelColor.withAlphaComponent(highlighted ? 0.12 : 0.06).setFill()
+        bgPath.fill()
+        NSColor.labelColor.withAlphaComponent(highlighted ? 0.18 : 0.10).setStroke()
+        bgPath.lineWidth = 1.0
+        bgPath.stroke()
 
-        let fgColor: NSColor = (isHovered && isEnabled) ? .white : .labelColor
+        let fgColor = NSColor.labelColor
 
         // Draw proportional screen & active zone icon at top center
         let iconWidth: CGFloat = 22.0
@@ -751,7 +777,6 @@ private final class ControllersSectionView: NSView {
             y: 68,
             title: "Top Snap Bar",
             iconKind: .topBar,
-            tintColor: .systemBlue,
             toggle: topBarSwitch,
             action: #selector(topBarSwitchChanged)
         )
@@ -763,7 +788,6 @@ private final class ControllersSectionView: NSView {
             y: 35,
             title: "Edge & Corner Snap",
             iconKind: .edgeSnap,
-            tintColor: .systemIndigo,
             toggle: edgeSnapSwitch,
             action: #selector(edgeSnapSwitchChanged)
         )
@@ -775,7 +799,6 @@ private final class ControllersSectionView: NSView {
             y: 2,
             title: "Paired Window Divider",
             iconKind: .divider,
-            tintColor: .systemPurple,
             toggle: dividerSwitch,
             action: #selector(dividerSwitchChanged)
         )
@@ -819,7 +842,6 @@ private final class ControllersSectionView: NSView {
         y: CGFloat,
         title: String,
         iconKind: ControllerIconView.IconKind,
-        tintColor: NSColor,
         toggle: NSSwitch,
         action: Selector
     ) -> NSView {
@@ -827,8 +849,7 @@ private final class ControllersSectionView: NSView {
 
         let iconView = ControllerIconView(
             frame: NSRect(x: 8, y: 4, width: 24, height: 24),
-            kind: iconKind,
-            tintColor: tintColor
+            kind: iconKind
         )
         row.addSubview(iconView)
 
@@ -862,6 +883,11 @@ private final class ControllersSectionView: NSView {
         dividerSwitch.state = isDividerEnabled ? .on : .off
         reconnectButton?.isEnabled = isMasterEnabled && isDividerEnabled
         clearButton?.isEnabled = isMasterEnabled && isDividerEnabled
+    }
+
+    func resetHoverState() {
+        reconnectButton?.resetHoverState()
+        clearButton?.resetHoverState()
     }
 
     @objc private func topBarSwitchChanged() {
@@ -899,11 +925,8 @@ private final class ControllerIconView: NSView {
     }
 
     private let kind: IconKind
-    private let tintColor: NSColor
-
-    init(frame: NSRect, kind: IconKind, tintColor: NSColor) {
+    init(frame: NSRect, kind: IconKind) {
         self.kind = kind
-        self.tintColor = tintColor
         super.init(frame: frame)
     }
 
@@ -913,11 +936,11 @@ private final class ControllerIconView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let bg = NSBezierPath(roundedRect: bounds, xRadius: 6.0, yRadius: 6.0)
-        tintColor.withAlphaComponent(0.20).setFill()
+        NSColor.labelColor.withAlphaComponent(0.06).setFill()
         bg.fill()
 
-        tintColor.setStroke()
-        tintColor.setFill()
+        NSColor.secondaryLabelColor.setStroke()
+        NSColor.secondaryLabelColor.setFill()
 
         switch kind {
         case .topBar:
@@ -981,6 +1004,8 @@ private final class ActionPillButton: NSView {
     var isEnabled = true {
         didSet {
             alphaValue = isEnabled ? 1.0 : 0.45
+            setAccessibilityEnabled(isEnabled)
+            if !isEnabled { resetHoverState() }
             needsDisplay = true
         }
     }
@@ -989,6 +1014,9 @@ private final class ActionPillButton: NSView {
         self.title = title
         self.onClick = onClick
         super.init(frame: frame)
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityLabel(title)
     }
 
     required init?(coder: NSCoder) {
@@ -1014,29 +1042,35 @@ private final class ActionPillButton: NSView {
     }
 
     override func mouseExited(with event: NSEvent) {
+        resetHoverState()
+    }
+
+    func resetHoverState() {
         isHovered = false
         needsDisplay = true
     }
 
     override func mouseDown(with event: NSEvent) {
-        guard isEnabled else { return }
+        _ = accessibilityPerformPress()
+    }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard isEnabled else { return false }
+        resetHoverState()
         onClick()
+        return true
     }
 
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 7.5, yRadius: 7.5)
-        if isHovered && isEnabled {
-            NSColor.controlAccentColor.setFill()
-            path.fill()
-        } else {
-            NSColor.labelColor.withAlphaComponent(0.07).setFill()
-            path.fill()
-            NSColor.labelColor.withAlphaComponent(0.10).setStroke()
-            path.lineWidth = 1.0
-            path.stroke()
-        }
+        let highlighted = isHovered && isEnabled
+        NSColor.labelColor.withAlphaComponent(highlighted ? 0.13 : 0.07).setFill()
+        path.fill()
+        NSColor.labelColor.withAlphaComponent(highlighted ? 0.18 : 0.10).setStroke()
+        path.lineWidth = 1.0
+        path.stroke()
 
-        let textColor: NSColor = (isHovered && isEnabled) ? .white : .labelColor
+        let textColor = NSColor.labelColor
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = .center
         let attrs: [NSAttributedString.Key: Any] = [
