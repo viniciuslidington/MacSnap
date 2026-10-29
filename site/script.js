@@ -107,28 +107,77 @@ configureMotion();
 
 // Brief previews run once in view. User input always takes over immediately.
 const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-const activePreviews = new Set();
 function onceInView(element, play) {
-  let played = false;
+  let done = false;
+  let running = false;
+  let focused = true;
+  let ratio = 0;
+  let visible = false;
+  let frame = 0;
   let stop = () => {};
   let disconnect = () => {};
-  const finish = () => {
+  const pause = () => {
+    if (!running) return;
+    running = false;
+    const cleanup = stop;
+    stop = () => {};
+    cleanup();
+  };
+  const cleanup = () => {
+    cancelAnimationFrame(frame);
     disconnect();
-    activePreviews.delete(cancel);
+    document.removeEventListener("visibilitychange", contextChanged);
+    reducedMotion.removeEventListener("change", contextChanged);
+    window.removeEventListener("blur", blur);
+    window.removeEventListener("focus", focus);
   };
-  const cancel = () => {
-    stop();
-    activePreviews.delete(cancel);
-    if (played) disconnect();
+  const finish = () => {
+    done = true;
+    running = false;
+    stop = () => {};
+    cleanup();
   };
-  const checkVisibility = (ratio, visible) => {
-    if (!visible) cancel();
-    if (played || ratio < 0.45 || reducedMotion.matches || document.hidden)
-      return;
-    played = true;
-    stop = play(finish) || (() => {});
-    activePreviews.add(cancel);
+  const maybePlay = () => {
+    if (done || running || !visible || ratio < 0.45 ||
+        reducedMotion.matches || document.hidden || !focused) return;
+    running = true;
+    const stopPlayback = play(finish) || (() => {});
+    if (!done) stop = stopPlayback;
   };
+  const checkVisibility = (nextRatio, nextVisible) => {
+    ratio = nextRatio;
+    visible = nextVisible;
+    if (!visible) pause();
+    maybePlay();
+  };
+  const checkRect = () => {
+    frame = 0;
+    const rect = element.getBoundingClientRect();
+    const height = Math.max(
+      0,
+      Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0),
+    );
+    checkVisibility(rect.height ? height / rect.height : 0, height > 0);
+  };
+  const queue = () => {
+    if (!done && !frame) frame = requestAnimationFrame(checkRect);
+  };
+  const contextChanged = () => {
+    if (document.hidden || reducedMotion.matches) pause();
+    else queue();
+  };
+  const blur = () => {
+    focused = false;
+    pause();
+  };
+  const focus = () => {
+    focused = true;
+    queue();
+  };
+  document.addEventListener("visibilitychange", contextChanged);
+  reducedMotion.addEventListener("change", contextChanged);
+  window.addEventListener("blur", blur);
+  window.addEventListener("focus", focus);
   if (typeof IntersectionObserver === "function") {
     const observer = new IntersectionObserver(
       (entries) => {
@@ -141,43 +190,21 @@ function onceInView(element, play) {
     observer.observe(element);
   } else {
     // Embedded browsers may omit IntersectionObserver. Read once per scroll frame.
-    let frame = 0;
-    const check = () => {
-      frame = 0;
-      const rect = element.getBoundingClientRect();
-      const height = Math.max(
-        0,
-        Math.min(rect.bottom, innerHeight) - Math.max(rect.top, 0),
-      );
-      checkVisibility(rect.height ? height / rect.height : 0, height > 0);
-    };
-    const queue = () => {
-      if (!frame) frame = requestAnimationFrame(check);
-    };
     window.addEventListener("scroll", queue, { passive: true });
     window.addEventListener("resize", queue);
     disconnect = () => {
-      cancelAnimationFrame(frame);
       window.removeEventListener("scroll", queue);
       window.removeEventListener("resize", queue);
     };
     queue();
   }
   return () => {
-    played = true;
-    cancel();
+    // User takeover is permanent; an interrupted automatic preview is retryable.
+    done = true;
+    pause();
+    cleanup();
   };
 }
-const stopActivePreviews = () => {
-  for (const stop of activePreviews) stop();
-};
-reducedMotion.addEventListener("change", () => {
-  if (reducedMotion.matches) stopActivePreviews();
-});
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden) stopActivePreviews();
-});
-window.addEventListener("blur", stopActivePreviews);
 
 const layoutDemo = document.querySelector("[data-layout-demo]");
 if (layoutDemo) {

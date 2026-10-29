@@ -9,6 +9,7 @@ on:
         "website/**",
         "scripts/build-site-locales.py",
         "scripts/check-site.py",
+        "scripts/test-site-motion.cjs",
         ".github/workflows/pages.yml",
       ]
   pull_request:
@@ -19,6 +20,7 @@ on:
         "website/**",
         "scripts/build-site-locales.py",
         "scripts/check-site.py",
+        "scripts/test-site-motion.cjs",
         ".github/workflows/pages.yml",
       ]
   workflow_dispatch:
@@ -39,8 +41,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
       - name: Check HTML, assets, links and sharing metadata
         run: python3 scripts/check-site.py
+      - name: Check automatic preview lifecycle
+        run: node --test scripts/test-site-motion.cjs
 
   deploy:
     name: Publish GitHub Pages
