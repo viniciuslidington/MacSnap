@@ -73,6 +73,7 @@ To completely uninstall MacSnap and remove Launch at Login at any time:
 ### 5. 🍏 macOS Menu Bar Utility (`NSStatusItem`)
 - Retina vector icon in paired split window style.
 - Context menu with 1-click snap shortcuts, Accessibility permission status indicator, and Launch at Login toggle.
+- Neutral menu icons, badges, and action buttons in light and dark mode; toggles retain the native accent color.
 - Lightweight background utility (`LSUIElement` / `.accessory`), consuming minimal RAM and zero background battery impact.
 
 ---
@@ -133,6 +134,7 @@ Coverage includes:
 - State transitions between pill mode, hover expansion, and collapse in the layout bar.
 - Independent visual slot highlighting across cards with identical target zones.
 - Automatic window adjacency detection and multi-monitor persistence.
+- Menu hover reset after clicking, closing, and reopening; accessibility press actions and disabled-action rejection while paused.
 
 ---
 
