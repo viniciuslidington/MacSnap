@@ -12,11 +12,13 @@ struct SnapPreviewTransitionTests {
         let preview = PreviewOverlayWindow()
         defer { preview.orderOut(nil) }
 
-        preview.present(at: SnapZone.bottomRightQuarter.targetRect(for: screen.visibleFrame))
-        try await Task.sleep(for: .milliseconds(200))
-        preview.dismiss()
-        preview.present(at: screen.visibleFrame, animated: animated)
-        try await Task.sleep(for: .milliseconds(250))
+        await withCompletedAppKitAnimations {
+            preview.present(at: SnapZone.bottomRightQuarter.targetRect(for: screen.visibleFrame))
+        }
+        await withCompletedAppKitAnimations {
+            preview.dismiss()
+            preview.present(at: screen.visibleFrame, animated: animated)
+        }
 
         #expect(preview.isVisible)
         #expect(preview.alphaValue > 0.8)
@@ -29,13 +31,15 @@ struct SnapPreviewTransitionTests {
         let preview = PreviewOverlayWindow()
         defer { preview.orderOut(nil) }
 
-        preview.present(at: SnapZone.bottomRightQuarter.targetRect(for: screen.visibleFrame))
-        try await Task.sleep(for: .milliseconds(200))
-        preview.dismiss()
-        preview.present(at: screen.visibleFrame)
-        preview.dismiss()
-        preview.dismiss()
-        try await Task.sleep(for: .milliseconds(250))
+        await withCompletedAppKitAnimations {
+            preview.present(at: SnapZone.bottomRightQuarter.targetRect(for: screen.visibleFrame))
+        }
+        await withCompletedAppKitAnimations {
+            preview.dismiss()
+            preview.present(at: screen.visibleFrame)
+            preview.dismiss()
+            preview.dismiss()
+        }
 
         #expect(!preview.isVisible)
         #expect(preview.alphaValue == 0)

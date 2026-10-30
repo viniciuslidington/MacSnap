@@ -221,12 +221,14 @@ struct GlobalEventMonitorIntegrationTests {
         let gapPoint = bar.convertPoint(toScreen: CGPoint(x: (quarter.maxX + maximize.minX) / 2, y: maximize.midY))
         let maximizePoint = bar.convertPoint(toScreen: CGPoint(x: maximize.midX, y: maximize.midY))
 
-        fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: quarterPoint)
+        await withCompletedAppKitAnimations {
+            fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: quarterPoint)
+        }
         #expect(fixture.engine.previews.last == .bottomRightQuarter)
-        try await Task.sleep(for: .milliseconds(200))
-        fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: gapPoint)
-        fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: maximizePoint)
-        try await Task.sleep(for: .milliseconds(250))
+        await withCompletedAppKitAnimations {
+            fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: gapPoint)
+            fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: maximizePoint)
+        }
 
         #expect(bar.currentlyHoveredSlotID == 13)
         #expect(fixture.engine.previews.last == .maximize)
