@@ -22,6 +22,8 @@
     <string>13.0</string>
     <key>LSUIElement</key>
     <true/>
+    <key>MacSnapCleanUninstallVersion</key>
+    <integer>1</integer>
     <key>SUFeedURL</key>
     <string>https://viniciuslidington.github.io/MacSnap/updates/appcast.xml</string>
     <key>SUAutomaticallyUpdate</key>

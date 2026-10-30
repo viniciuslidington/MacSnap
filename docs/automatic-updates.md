@@ -10,21 +10,7 @@ The next candidate is **1.0.8, build 8**. This prepares version metadata for rev
 
 The local 1.0.8 candidate was assembled with the configured production public key, archived, extracted and recursively code-signature verified. Both architecture slices are present. Its archive has not been signed with the production private key; that verification remains part of trusted release preparation. The local SHA-256 and verification receipt are kept in ignored build output, not offered to clients.
 
-| Verification | Result |
-| --- | --- |
-| Swift/AppKit integration tests | 86 tests passed, including menu actions and safe termination |
-| Distribution policies and signatures | 20 tests passed, including withdrawal, stale promotion and real CryptoKit verification |
-| Existing website checks | Both languages and all 12 preview lifecycle tests passed |
-| Universal application | Intel and Apple silicon slices built; both report macOS 13.0 minimum |
-| Isolated Sparkle A → B installation | Passed on Apple silicon/macOS 26.6.2, using two separately compiled Cocoa test apps and an ephemeral EdDSA key |
-| Full MacSnap local A → B rehearsal | Maintainer reported success on 2026-10-29; installed 1.0.9/build 9 executable matches the independently compiled B candidate and its recursive code signature verifies |
-| Helper runtime/signatures | Vendor helper signatures/runtime flags retained; no library-validation bypass added |
-| Native deferred termination | Actual production updater/scheduler waited for a simulated interaction and exited after 1.550 seconds in AppKit's native termination loop |
-| Full MacSnap candidate packaging | Extractable app, embedded framework, valid nested code signatures and valid EdDSA archive signature |
-| Accessibility under the production bundle identity | Not yet validated; the completed rehearsal uses a separate test identity |
-| Intel/macOS 13 runtime | Deferred to future user testing by maintainer decision; not validated |
-| Clean-profile migration | Not yet validated |
-| Production feed/release | Not published |
+VerificationResultSwift/AppKit integration tests86 tests passed, including menu actions and safe terminationDistribution policies and signatures20 tests passed, including withdrawal, stale promotion and real CryptoKit verificationExisting website checksBoth languages and all 12 preview lifecycle tests passedUniversal applicationIntel and Apple silicon slices built; both report macOS 13.0 minimumIsolated Sparkle A → B installationPassed on Apple silicon/macOS 26.6.2, using two separately compiled Cocoa test apps and an ephemeral EdDSA keyFull MacSnap local A → B rehearsalMaintainer reported success on 2026-10-29; installed 1.0.9/build 9 executable matches the independently compiled B candidate and its recursive code signature verifiesHelper runtime/signaturesVendor helper signatures/runtime flags retained; no library-validation bypass addedNative deferred terminationActual production updater/scheduler waited for a simulated interaction and exited after 1.550 seconds in AppKit's native termination loopFull MacSnap candidate packagingExtractable app, embedded framework, valid nested code signatures and valid EdDSA archive signatureAccessibility under the production bundle identityNot yet validated; the completed rehearsal uses a separate test identityIntel/macOS 13 runtimeDeferred to future user testing by maintainer decision; not validatedClean-profile migrationNot yet validatedProduction feed/releaseNot published
 
 The isolated pilot used a loopback-only staging server. This demonstrates Sparkle replacement/relaunch, not public HTTPS delivery, a clean first installation, or MacSnap's Accessibility behavior. Temporary pilot artifacts are under ignored build output; its disposable private key was removed after validation and must never be used as a production credential.
 

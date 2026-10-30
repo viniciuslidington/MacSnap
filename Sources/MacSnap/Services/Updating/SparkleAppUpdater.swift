@@ -7,6 +7,8 @@ final class SparkleAppUpdater: NSObject, AppUpdating, SPUUpdaterDelegate, @preco
     private var controller: SPUStandardUpdaterController?
     private var availabilityObservation: NSKeyValueObservation?
     private var pendingVersion: String?
+    private var installationPending = false
+    private let mayCheckForUpdates: () -> Bool
     private let installationIsBusy: () -> Bool
     private let scheduler: any ActionScheduling
     private var terminationCheck: (any ScheduledAction)?
@@ -16,9 +18,11 @@ final class SparkleAppUpdater: NSObject, AppUpdating, SPUUpdaterDelegate, @preco
 
     init(
         installationIsBusy: @escaping () -> Bool,
+        mayCheckForUpdates: @escaping () -> Bool = { true },
         scheduler: (any ActionScheduling)? = nil
     ) {
         self.installationIsBusy = installationIsBusy
+        self.mayCheckForUpdates = mayCheckForUpdates
         self.scheduler = scheduler ?? MainActorScheduler.shared
         super.init()
         let bundle = Bundle.main
@@ -41,7 +45,8 @@ final class SparkleAppUpdater: NSObject, AppUpdating, SPUUpdaterDelegate, @preco
     var presentation: UpdatePresentation {
         UpdatePresentation(isAvailable: controller != nil,
                            canCheck: controller?.updater.canCheckForUpdates ?? false,
-                           pendingVersion: pendingVersion)
+                           pendingVersion: pendingVersion,
+                           isUninstallSafe: !(controller?.updater.sessionInProgress ?? false) && !installationPending && pendingVersion == nil)
     }
 
     var automaticallyChecksForUpdates: Bool {
@@ -90,6 +95,20 @@ final class SparkleAppUpdater: NSObject, AppUpdating, SPUUpdaterDelegate, @preco
     }
 
     var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    func updater(_ updater: SPUUpdater, mayPerform updateCheck: SPUUpdateCheck) throws {
+        guard mayCheckForUpdates() else {
+            throw NSError(domain: "MacSnap.Uninstallation", code: 1,
+                          userInfo: [NSLocalizedDescriptionKey: "MacSnap is being uninstalled."])
+        }
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
+                 immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
+        installationPending = true
+        onChange?()
+        return false
+    }
 
     func standardUserDriverShouldHandleShowingScheduledUpdate(
         _ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool

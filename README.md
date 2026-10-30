@@ -28,7 +28,15 @@ To install **MacSnap** on your Mac in seconds, open **Terminal** and run:
 
 ### Uninstallation
 
-To completely uninstall MacSnap and remove Launch at Login at any time:
+Packaged builds that include the clean uninstaller offer **Uninstall MacSnap…** in the status menu. The confirmation closes the app, moves it to Trash and removes its settings, caches, startup entry and privacy permissions. [Clean-uninstall behavior and limits](docs/clean-uninstall.md).
+
+To preview the cleanup from Terminal before confirming it:
+
+```bash
+/Applications/MacSnap.app/Contents/Helpers/MacSnapUninstaller --dry-run
+```
+
+The public 1.0.7 build predates that helper. From this source checkout, use `./scripts/uninstall.sh --dry-run`, then `./scripts/uninstall.sh` and type `UNINSTALL`. Quit MacSnap first. Once a release includes the helper, the remote installer can use the same removal flow:
 
 ```bash
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/viniciuslidington/MacSnap/main/install.sh)" -- --uninstall

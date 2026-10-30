@@ -159,13 +159,20 @@ def assemble(args):
     (app / "Contents/MacOS").mkdir(parents=True)
     (app / "Contents/Resources").mkdir()
     shutil.copy2(args.binary, app / "Contents/MacOS/MacSnap")
+    helper = args.binary.parent / "MacSnapUninstaller"
+    require(helper.is_file(), "Build MacSnapUninstaller before assembling the app")
+    app_archs = set(subprocess.check_output(["lipo", "-archs", str(args.binary)], text=True).split())
+    helper_archs = set(subprocess.check_output(["lipo", "-archs", str(helper)], text=True).split())
+    require(app_archs.issubset(helper_archs), "Uninstaller does not support all app architectures")
+    (app / "Contents/Helpers").mkdir()
+    shutil.copy2(helper, app / "Contents/Helpers/MacSnapUninstaller")
     shutil.copy2(ROOT / "Resources/AppIcon.icns", app / "Contents/Resources/AppIcon.icns")
     framework = SPARKLE / "Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
     subprocess.run(["ditto", str(framework), str(app / "Contents/Frameworks/Sparkle.framework")], check=True)
     (app / "Contents/Resources/Sparkle-LICENSE.txt").write_bytes((SPARKLE / "LICENSE").read_bytes())
     (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
     # Vendor helpers retain their original signatures and runtime flags. Sign outer layers last.
-    for path in [app / "Contents/Frameworks/Sparkle.framework", app]:
+    for path in [app / "Contents/Helpers/MacSnapUninstaller", app / "Contents/Frameworks/Sparkle.framework", app]:
         subprocess.run(["codesign", "--force", "--sign", args.identity, str(path)], check=True)
     subprocess.run(["codesign", "--verify", "--strict", "--deep", str(app)], check=True)
     linked = subprocess.check_output(["otool", "-l", str(app / "Contents/MacOS/MacSnap")], text=True)

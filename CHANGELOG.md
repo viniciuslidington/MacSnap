@@ -4,6 +4,7 @@
 
 ### Added
 
+- Clean uninstallation from the status menu or Terminal, with confirmation, a read-only preview and cleanup of settings, caches, startup entries and app-specific permissions.
 - Sparkle updates from the status menu, with pending-version reminders, scheduled-check preferences and a separate automatic-download/install preference.
 - EdDSA-authenticated universal update archives, draft release preparation and explicit approval before feed publication.
 - Feed preservation across website deployments, stale-publication rejection and permanent withdrawal of affected builds.

@@ -1,27 +1,16 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-PLIST_LABEL="com.viniciuslidington.MacSnap"
-LAUNCH_AGENT_PATH="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
-APP_DEST="/Applications/MacSnap.app"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+for INSTALLED_APP in "/Applications/MacSnap.app" "$HOME/Applications/MacSnap.app"; do
+    INSTALLED_HELPER="$INSTALLED_APP/Contents/Helpers/MacSnapUninstaller"
+    if [ -x "$INSTALLED_HELPER" ]; then
+        exec "$INSTALLED_HELPER" --app "$INSTALLED_APP" "$@"
+    fi
+done
 
-echo "=========================================================="
-echo "🛑 Uninstalling MacSnap and removing Launch at Login..."
-echo "=========================================================="
-
-pkill -x "MacSnap" 2>/dev/null || true
-
-if [ -f "$LAUNCH_AGENT_PATH" ]; then
-    launchctl unload "$LAUNCH_AGENT_PATH" 2>/dev/null || true
-    rm -f "$LAUNCH_AGENT_PATH"
-    echo "✓ Removed from LaunchAgents ($LAUNCH_AGENT_PATH)"
-fi
-
-if [ -d "$APP_DEST" ]; then
-    rm -rf "$APP_DEST"
-    echo "✓ Removed from $APP_DEST"
-fi
-
-echo "=========================================================="
-echo "✅ MacSnap successfully uninstalled."
-echo "=========================================================="
+# A source checkout can build the same native helper without installing or launching MacSnap.
+cd "$PROJECT_DIR"
+swift build -c release --product MacSnapUninstaller
+BUILD_DIR="$(swift build -c release --show-bin-path)"
+exec "$BUILD_DIR/MacSnapUninstaller" "$@"

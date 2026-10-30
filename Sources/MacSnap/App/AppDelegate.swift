@@ -4,6 +4,7 @@ import Cocoa
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
     private var appUpdater: (any AppUpdating)?
+    private var appUninstaller: AppUninstaller?
     private let accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared
     private let eventMonitor: EventMonitoringProtocol = GlobalEventMonitor.shared
     private var activationObserver: NSObjectProtocol?
@@ -16,9 +17,14 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         let updater = SparkleAppUpdater(installationIsBusy: {
             GlobalEventMonitor.shared.hasActiveWindowInteraction ||
                 PairedResizeManager.shared.hasActiveResizeOperation || NSEvent.pressedMouseButtons != 0
-        })
+        }, mayCheckForUpdates: { [weak self] in self?.appUninstaller?.isPreparing != true })
         appUpdater = updater
-        menuBarController = MenuBarController(appUpdater: updater)
+        let uninstaller = AppUninstaller(canUninstall: { updater.presentation.isUninstallSafe })
+        appUninstaller = uninstaller
+        menuBarController = MenuBarController(
+            appUpdater: updater,
+            onUninstall: uninstaller.isAvailable ? { [weak uninstaller] in uninstaller?.requestUninstall() } : nil
+        )
 
         // Check accessibility permissions on launch
         let hasPermission = accessibilityService.isAccessibilityGranted(promptIfNeeded: true)

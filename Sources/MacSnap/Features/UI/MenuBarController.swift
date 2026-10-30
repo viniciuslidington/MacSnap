@@ -10,6 +10,7 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     private let pairingManager: PairedResizeManager
     private let eventMonitor: GlobalEventMonitor
     private let appUpdater: any AppUpdating
+    private let onUninstall: (() -> Void)?
     private var checkForUpdatesItem: NSMenuItem?
     private var automaticChecksItem: NSMenuItem?
     private var automaticInstallItem: NSMenuItem?
@@ -28,13 +29,15 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         snapEngine: WindowSnappingProtocol = SnapEngine.shared,
         pairingManager: PairedResizeManager = PairedResizeManager.shared,
         eventMonitor: GlobalEventMonitor = GlobalEventMonitor.shared,
-        appUpdater: (any AppUpdating)? = nil
+        appUpdater: (any AppUpdating)? = nil,
+        onUninstall: (() -> Void)? = nil
     ) {
         self.accessibilityService = accessibilityService
         self.snapEngine = snapEngine
         self.pairingManager = pairingManager
         self.eventMonitor = eventMonitor
         self.appUpdater = appUpdater ?? UnavailableAppUpdater()
+        self.onUninstall = onUninstall
         super.init()
         setupStatusItem()
         self.appUpdater.onChange = { [weak self] in self?.refreshUpdateState() }
@@ -196,6 +199,10 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         menu.addItem(NSMenuItem.separator())
 
         addUpdateMenu(to: menu)
+        let uninstall = NSMenuItem(title: "Uninstall MacSnap…", action: #selector(uninstallMacSnap), keyEquivalent: "")
+        uninstall.target = self
+        uninstall.isEnabled = onUninstall != nil
+        menu.addItem(uninstall)
         menu.addItem(NSMenuItem.separator())
 
         // 6. System & Footer (Launch at Login NSSwitch + Version + Quit)
@@ -276,6 +283,12 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         guard appUpdater.presentation.canCheck else { return }
         statusItem?.menu?.cancelTracking()
         appUpdater.checkForUpdates()
+    }
+
+    @objc private func uninstallMacSnap() {
+        guard let onUninstall else { return }
+        statusItem?.menu?.cancelTracking()
+        onUninstall()
     }
 
     @objc private func toggleAutomaticChecks() {

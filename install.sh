@@ -31,18 +31,29 @@ NC='\033[0m' # No Color
 
 # 1. Uninstall support (--uninstall / -u)
 if [[ "$1" == "--uninstall" ]] || [[ "$1" == "-u" ]]; then
-    echo -e "${YELLOW}🛑 Uninstalling MacSnap...${NC}"
-    pkill -x "MacSnap" 2>/dev/null || true
-    if [ -f "$LAUNCH_AGENT_PATH" ]; then
-        launchctl unload "$LAUNCH_AGENT_PATH" 2>/dev/null || true
-        rm -f "$LAUNCH_AGENT_PATH"
-        echo -e "  ${GREEN}✓${NC} Launch at Login removed from LaunchAgents"
+    shift
+    for UNINSTALL_APP in "$APP_DEST" "$HOME/Applications/$APP_NAME"; do
+        UNINSTALL_HELPER="$UNINSTALL_APP/Contents/Helpers/MacSnapUninstaller"
+        if [ -x "$UNINSTALL_HELPER" ]; then
+            exec "$UNINSTALL_HELPER" --app "$UNINSTALL_APP" "$@"
+        fi
+    done
+    UNINSTALL_SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+    if [ -f "$UNINSTALL_SOURCE_DIR/Package.swift" ] && [ -f "$UNINSTALL_SOURCE_DIR/scripts/uninstall.sh" ]; then
+        exec /bin/bash "$UNINSTALL_SOURCE_DIR/scripts/uninstall.sh" "$@"
     fi
-    if [ -d "$APP_DEST" ]; then
-        rm -rf "$APP_DEST"
-        echo -e "  ${GREEN}✓${NC} $APP_DEST removed"
+    # If the app was already deleted, obtain only a published, signature-verified helper.
+    UNINSTALL_STAGE="$(mktemp -d /tmp/macsnap-uninstall.XXXXXX)"
+    trap 'rm -rf "$UNINSTALL_STAGE"' EXIT
+    curl --fail --location "$RELEASE_URL" --output "$UNINSTALL_STAGE/MacSnap.app.zip"
+    ditto -x -k "$UNINSTALL_STAGE/MacSnap.app.zip" "$UNINSTALL_STAGE/extracted"
+    UNINSTALL_HELPER="$UNINSTALL_STAGE/extracted/MacSnap.app/Contents/Helpers/MacSnapUninstaller"
+    if [ ! -x "$UNINSTALL_HELPER" ]; then
+        echo "This published version does not include the clean uninstaller. Use the source checkout's scripts/uninstall.sh."
+        exit 1
     fi
-    echo -e "\n${GREEN}${BOLD}✅ MacSnap successfully uninstalled!${NC}\n"
+    codesign --verify --strict "$UNINSTALL_HELPER"
+    "$UNINSTALL_HELPER" "$@"
     exit 0
 fi
 
