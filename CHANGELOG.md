@@ -15,6 +15,10 @@
 - Application shutdown waits for an active window drag or paired resize to finish.
 - Bundle assembly includes Sparkle and its license; the public installer preserves the shipped signature without removing quarantine or re-signing the app.
 
+### Fixed
+
+- Moving from a quarter-screen layout to Maximize across the gap between cards no longer lets a stale fade-out hide the new preview. The displayed target stays aligned with the layout applied on release.
+
 ### Release notes
 
 - Version 1.0.7 users need one manual installation of the first updater-enabled release. Version 1.0.8 has not been published yet.

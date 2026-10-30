@@ -8,6 +8,7 @@ import QuartzCore
 public final class PreviewOverlayWindow: NSWindow {
     private let previewView = PreviewContentView()
     private var currentTargetRect: CGRect?
+    private var presentationGeneration: UInt64 = 0
 
     public init() {
         super.init(
@@ -34,6 +35,7 @@ public final class PreviewOverlayWindow: NSWindow {
         if self.isVisible && self.currentTargetRect == targetRect {
             return
         }
+        presentationGeneration &+= 1
         self.currentTargetRect = targetRect
 
         if !self.isVisible {
@@ -48,29 +50,31 @@ public final class PreviewOverlayWindow: NSWindow {
                 self.animator().alphaValue = 0.92
             }
         } else {
-            if animated {
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0.12
-                    context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                    self.animator().setFrame(targetRect, display: true)
-                }
-            } else {
-                self.setFrame(targetRect, display: true)
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = animated ? 0.12 : 0
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                // Crossing a gap can start dismiss() immediately before this selection.
+                // Supersede its fade as well as its stale completion callback.
+                self.animator().alphaValue = 0.92
+                self.animator().setFrame(targetRect, display: true)
             }
         }
     }
 
     /// Hides the preview window with a smooth fade-out.
     public func dismiss() {
-        guard self.isVisible else { return }
+        guard self.isVisible, currentTargetRect != nil else { return }
         self.currentTargetRect = nil
+        presentationGeneration &+= 1
+        let generation = presentationGeneration
 
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.1
             self.animator().alphaValue = 0.0
         }, completionHandler: { [weak self] in
             DispatchQueue.main.async {
-                self?.orderOut(nil)
+                guard let self, self.presentationGeneration == generation else { return }
+                self.orderOut(nil)
             }
         })
     }
