@@ -63,6 +63,12 @@ public final class PairedResizeManager {
         statesByScreen.values.contains { $0.dividerWindow.isDragging }
     }
 
+    var hasActiveResizeOperation: Bool {
+        statesByScreen.values.contains {
+            $0.resizeSession?.phase == .dragging || $0.resizeSession?.phase == .settling
+        }
+    }
+
     public init(
         screenService: ScreenServiceProtocol = ScreenService.shared,
         accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared,

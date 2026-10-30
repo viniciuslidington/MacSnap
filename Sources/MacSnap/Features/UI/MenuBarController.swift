@@ -9,6 +9,10 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     private let snapEngine: WindowSnappingProtocol
     private let pairingManager: PairedResizeManager
     private let eventMonitor: GlobalEventMonitor
+    private let appUpdater: any AppUpdating
+    private var checkForUpdatesItem: NSMenuItem?
+    private var automaticChecksItem: NSMenuItem?
+    private var automaticInstallItem: NSMenuItem?
 
     private static let menuWidth: CGFloat = 310.0
 
@@ -19,18 +23,21 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     private weak var horizontalMenuItem: NSMenuItem?
     private weak var verticalMenuItem: NSMenuItem?
 
-    public init(
+    init(
         accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared,
         snapEngine: WindowSnappingProtocol = SnapEngine.shared,
         pairingManager: PairedResizeManager = PairedResizeManager.shared,
-        eventMonitor: GlobalEventMonitor = GlobalEventMonitor.shared
+        eventMonitor: GlobalEventMonitor = GlobalEventMonitor.shared,
+        appUpdater: (any AppUpdating)? = nil
     ) {
         self.accessibilityService = accessibilityService
         self.snapEngine = snapEngine
         self.pairingManager = pairingManager
         self.eventMonitor = eventMonitor
+        self.appUpdater = appUpdater ?? UnavailableAppUpdater()
         super.init()
         setupStatusItem()
+        self.appUpdater.onChange = { [weak self] in self?.refreshUpdateState() }
     }
 
     public func menuWillOpen(_ menu: NSMenu) {
@@ -188,13 +195,17 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
 
         menu.addItem(NSMenuItem.separator())
 
+        addUpdateMenu(to: menu)
+        menu.addItem(NSMenuItem.separator())
+
         // 6. System & Footer (Launch at Login NSSwitch + Version + Quit)
         let footerItem = NSMenuItem()
-        let versionString = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0.7"
+        let versionText = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String)
+            .map { "MacSnap v\($0)" } ?? "MacSnap Development"
         let footer = MenuFooterSectionView(
             width: Self.menuWidth,
             isLaunchAtLogin: isLoginItemEnabled(),
-            versionText: "MacSnap v\(versionString)",
+            versionText: versionText,
             onToggleLaunchAtLogin: { [weak self] _ in
                 self?.toggleLaunchAtLogin()
             },
@@ -212,6 +223,7 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     private func refreshMenuState() {
+        refreshUpdateState()
         let isGranted = accessibilityService.isAccessibilityGranted(promptIfNeeded: false)
         let isMaster = eventMonitor.isMasterEnabled
 
@@ -227,6 +239,53 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
         verticalMenuItem?.isEnabled = isMaster
         footerView?.updateLaunchAtLogin(isLoginItemEnabled())
         statusItem?.button?.alphaValue = isMaster ? 1.0 : 0.45
+    }
+
+    private func addUpdateMenu(to menu: NSMenu) {
+        let check = NSMenuItem(title: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "")
+        check.target = self
+        menu.addItem(check)
+        checkForUpdatesItem = check
+        let preferences = NSMenu(title: "Updates")
+        preferences.autoenablesItems = false
+        let checks = NSMenuItem(title: "Automatically Check for Updates", action: #selector(toggleAutomaticChecks), keyEquivalent: "")
+        checks.target = self
+        preferences.addItem(checks)
+        automaticChecksItem = checks
+        let install = NSMenuItem(title: "Automatically Download and Install", action: #selector(toggleAutomaticInstall), keyEquivalent: "")
+        install.target = self
+        preferences.addItem(install)
+        automaticInstallItem = install
+        let parent = NSMenuItem(title: "Updates", action: nil, keyEquivalent: "")
+        parent.submenu = preferences
+        menu.addItem(parent)
+    }
+
+    private func refreshUpdateState() {
+        let state = appUpdater.presentation
+        checkForUpdatesItem?.title = state.pendingVersion.map { "Update to \($0)…" } ?? "Check for Updates…"
+        checkForUpdatesItem?.isEnabled = state.canCheck
+        checkForUpdatesItem?.toolTip = state.isAvailable ? nil : "Updates are unavailable for this build."
+        automaticChecksItem?.isEnabled = state.isAvailable
+        automaticChecksItem?.state = appUpdater.automaticallyChecksForUpdates ? .on : .off
+        automaticInstallItem?.isEnabled = state.isAvailable
+        automaticInstallItem?.state = appUpdater.automaticallyInstallsUpdates ? .on : .off
+    }
+
+    @objc private func checkForUpdates() {
+        guard appUpdater.presentation.canCheck else { return }
+        statusItem?.menu?.cancelTracking()
+        appUpdater.checkForUpdates()
+    }
+
+    @objc private func toggleAutomaticChecks() {
+        guard appUpdater.presentation.isAvailable else { return }
+        appUpdater.automaticallyChecksForUpdates.toggle()
+    }
+
+    @objc private func toggleAutomaticInstall() {
+        guard appUpdater.presentation.isAvailable else { return }
+        appUpdater.automaticallyInstallsUpdates.toggle()
     }
 
     private func setMasterEnabled(_ isEnabled: Bool) {
