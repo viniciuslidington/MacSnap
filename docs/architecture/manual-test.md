@@ -1,12 +1,12 @@
 # Teste local da refatoração nativa
 
-A versão continua **1.0.7 / build 7**. Não foi criada tag nem feita atualização de release. O build de teste fica separado da instalação em `/Applications/MacSnap.app`.
+A branch prepara a versão **1.0.8 / build 8**; a release pública continua sendo a 1.0.7. Não foi criada tag nem publicada uma nova release. O build de teste fica separado da instalação em `/Applications/MacSnap.app`.
 
 ## Abrir e voltar à instalação atual
 
 1. Gere o pacote com `./scripts/build-development-app.sh`. O script roda a suíte de testes e compila Apple Silicon + Intel; não instala nem inicia o programa.
 2. Encerre o MacSnap que já está aberto pelo item **Quit** do menu. Não deixe duas instâncias capturando eventos ao mesmo tempo.
-3. Abra `.build/manual-test/MacSnap.app` deste projeto. O identificador e o plist são os mesmos do app atual; uma assinatura de desenvolvimento disponível é usada. Em outra máquina sem esse certificado, assinatura ad-hoc pode exigir conceder acessibilidade ao build de teste.
+3. Abra o caminho impresso pelo script, dentro de `.build/manual-test.XXXXXX/MacSnap.app`. Cada execução gera um diretório novo. O identificador permanece o mesmo do app atual; o framework do atualizador e uma assinatura de desenvolvimento disponível são incluídos. Sem chave pública configurada, as ações de atualização ficam indisponíveis. Em outra máquina sem esse certificado, assinatura ad-hoc pode exigir conceder acessibilidade ao build de teste.
 4. Teste os cenários abaixo. O objetivo é conferir comportamento, não somente ausência de mensagens de erro.
 5. Para voltar, encerre o build de teste e abra `/Applications/MacSnap.app`. A instalação e a configuração de início automático não são substituídas pelo script.
 

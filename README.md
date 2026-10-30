@@ -1,5 +1,7 @@
 # MacSnap 🪟⚡
 
+Update-channel implementation and release readiness are documented in [Automatic updates](docs/automatic-updates.md). The current public 1.0.7 download still needs one manual bootstrap into a future updater-enabled release; no automatic-update availability is claimed for that binary.
+
 > Native macOS window manager built with **pure Swift**, bringing the convenience and power of **Windows 11 Snap Layouts** and **interactive paired split resizing** to the Mac ecosystem with a refined **Apple Glass UI** aesthetic.
 
 [![macOS](https://img.shields.io/badge/macOS-13.0%2B-blue?logo=apple&logoColor=white)](https://www.apple.com/macos/)
