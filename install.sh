@@ -62,9 +62,6 @@ echo -e "${NC}"
 echo -e "${BOLD}🪟 Installing MacSnap on your Mac...${NC}"
 echo "----------------------------------------------------------"
 
-# Terminate running instances before update
-pkill -x "MacSnap" 2>/dev/null || true
-
 INSTALLED=false
 
 # 3. If running inside a local cloned repo, run local install script
@@ -78,6 +75,7 @@ fi
 # 4. Remote mode: attempt to download pre-compiled release binary from GitHub Releases
 echo -e "📥 Downloading latest official release..."
 TMP_DIR=$(mktemp -d /tmp/macsnap-install-XXXXXX)
+trap 'rm -rf "$TMP_DIR"' EXIT
 ZIP_FILE="$TMP_DIR/MacSnap.app.zip"
 
 if curl -f -L --progress-bar "$RELEASE_URL" -o "$ZIP_FILE" 2>/dev/null; then
@@ -85,8 +83,25 @@ if curl -f -L --progress-bar "$RELEASE_URL" -o "$ZIP_FILE" 2>/dev/null; then
     unzip -q -o "$ZIP_FILE" -d "$TMP_DIR"
     
     if [ -d "$TMP_DIR/$APP_NAME" ]; then
-        rm -rf "$APP_DEST"
-        cp -R "$TMP_DIR/$APP_NAME" "$APP_DEST"
+        # Validate before stopping/removing the installed copy. Preserve the shipped signature.
+        test "$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$TMP_DIR/$APP_NAME/Contents/Info.plist")" = "$PLIST_LABEL"
+        test -x "$TMP_DIR/$APP_NAME/Contents/MacOS/MacSnap"
+        codesign --verify --strict --deep "$TMP_DIR/$APP_NAME"
+        INSTALL_STAGE=$(mktemp -d "$DEST_DIR/.macsnap-install-XXXXXX")
+        ditto "$TMP_DIR/$APP_NAME" "$INSTALL_STAGE/$APP_NAME"
+        codesign --verify --strict --deep "$INSTALL_STAGE/$APP_NAME"
+        pkill -x "MacSnap" 2>/dev/null || true
+        if [ -e "$APP_DEST" ]; then
+            mv "$APP_DEST" "$INSTALL_STAGE/previous.app"
+        fi
+        if ! mv "$INSTALL_STAGE/$APP_NAME" "$APP_DEST"; then
+            if [ -e "$INSTALL_STAGE/previous.app" ]; then
+                mv "$INSTALL_STAGE/previous.app" "$APP_DEST"
+            fi
+            echo -e "${RED}❌ Installation failed; the previous app was preserved.${NC}"
+            exit 1
+        fi
+        rm -rf "$INSTALL_STAGE"
         INSTALLED=true
         echo -e "  ${GREEN}✓${NC} Application installed in $APP_DEST"
     fi
@@ -112,9 +127,8 @@ fi
 
 rm -rf "$TMP_DIR"
 
-# 6. Remove Gatekeeper quarantine and apply clean signature
-xattr -dr com.apple.quarantine "$APP_DEST" 2>/dev/null || true
-codesign --force --deep --sign - "$APP_DEST" 2>/dev/null || true
+# 6. Keep the release's bundle and signature unchanged after download.
+codesign --verify --strict --deep "$APP_DEST"
 
 # 7. Configure LaunchAgent for Launch at Login
 echo -e "⚙️  Configuring Launch at Login..."

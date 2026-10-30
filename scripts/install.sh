@@ -20,13 +20,9 @@ echo "=========================================================="
 # 1. Compile optimized Release binary (Universal arm64 + x86_64 when supported)
 echo "📦 Building production binary (Release)..."
 cd "$PROJECT_DIR"
-swift build -c release --arch arm64 --arch x86_64 2>/dev/null || swift build -c release
+swift build -c release --arch arm64 --arch x86_64
 
-RELEASE_BIN="$PROJECT_DIR/.build/out/Products/Release/MacSnap"
-if [ ! -f "$RELEASE_BIN" ]; then
-    # Fallback to default Swift PM build path if different
-    RELEASE_BIN=$(find "$PROJECT_DIR/.build" -type f -name "MacSnap" -perm +111 | grep -i "release" | head -n 1)
-fi
+RELEASE_BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/MacSnap"
 
 if [ ! -f "$RELEASE_BIN" ]; then
     echo "❌ Error: Compiled binary was not found."
@@ -35,22 +31,9 @@ fi
 
 # 2. Create .app bundle structure
 echo "📁 Assembling $APP_NAME bundle..."
-TMP_APP="/tmp/$APP_NAME"
-rm -rf "$TMP_APP"
-mkdir -p "$TMP_APP/Contents/MacOS"
-mkdir -p "$TMP_APP/Contents/Resources"
-
-# Copy binary
-cp "$RELEASE_BIN" "$TMP_APP/Contents/MacOS/MacSnap"
-chmod +x "$TMP_APP/Contents/MacOS/MacSnap"
-
-# Copy Info.plist
-cp "$PROJECT_DIR/Resources/Info.plist" "$TMP_APP/Contents/Info.plist"
-
-# Copy icon if present
-if [ -f "$PROJECT_DIR/Resources/AppIcon.icns" ]; then
-    cp "$PROJECT_DIR/Resources/AppIcon.icns" "$TMP_APP/Contents/Resources/AppIcon.icns"
-fi
+BUILD_STAGE="$(mktemp -d /tmp/macsnap-local-install.XXXXXX)"
+TMP_APP="$BUILD_STAGE/$APP_NAME"
+trap 'rm -rf "$BUILD_STAGE"' EXIT
 
 # 3. Code signature (codesign)
 # Look for local Apple Development certificate in keychain for a stable
@@ -58,11 +41,13 @@ fi
 DEV_CERT=$(security find-identity -p codesigning -v | grep "Apple Development" | head -n 1 | awk -F '"' '{print $2}')
 if [ -n "$DEV_CERT" ]; then
     echo "🔏 Signing with stable developer certificate: $DEV_CERT..."
-    codesign --force --deep --sign "$DEV_CERT" "$TMP_APP"
+    SIGNING_IDENTITY="$DEV_CERT"
 else
     echo "🔏 Applying ad-hoc codesign signature..."
-    codesign --force --deep --sign - "$TMP_APP"
+    SIGNING_IDENTITY="-"
 fi
+python3 scripts/update-distribution.py assemble --binary "$RELEASE_BIN" --output "$TMP_APP" \
+    --identity "$SIGNING_IDENTITY" --allow-unconfigured
 
 # 4. Install in /Applications
 echo "📂 Copying to $DEST_DIR..."
