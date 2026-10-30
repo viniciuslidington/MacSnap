@@ -26,6 +26,13 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '^16'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated disk image tooling
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmg-tools"
+          "$RUNNER_TEMP/dmg-tools/bin/python" -m pip install -r scripts/requirements-dmg.txt
       - name: Validate candidate identity and configuration
         run: |
           python3 - <<'PY'
@@ -40,6 +47,7 @@ jobs:
         run: |
           swift test
           python3 scripts/test-update-distribution.py
+          python3 scripts/test-dmg-distribution.py
       - name: Build universal application
         run: |
           swift build -c release --arch arm64 --arch x86_64
@@ -49,6 +57,8 @@ jobs:
           [[ " $RELEASE_ARCHS " == *" x86_64 "* ]]
           python3 scripts/update-distribution.py assemble --binary "$RELEASE_BIN" --output "$RUNNER_TEMP/candidate/MacSnap.app"
           ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/candidate/MacSnap.app" "$RUNNER_TEMP/candidate/MacSnap.app.zip"
+      - name: Build verified drag-to-Applications installer
+        run: '"$RUNNER_TEMP/dmg-tools/bin/python" scripts/build-dmg.py build --app "$RUNNER_TEMP/candidate/MacSnap.app" --image "$RUNNER_TEMP/candidate/MacSnap.dmg"'
       - name: Generate release notes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -58,12 +68,17 @@ jobs:
           MACSNAP_UPDATE_PRIVATE_KEY: ${{ secrets.MACSNAP_UPDATE_PRIVATE_KEY }}
         run: |
           python3 scripts/update-distribution.py prepare --archive "$RUNNER_TEMP/candidate/MacSnap.app.zip" --tag "$RELEASE_TAG" --notes "$RUNNER_TEMP/candidate/notes.md" --output "$RUNNER_TEMP/candidate/appcast.xml"
-          shasum -a 256 "$RUNNER_TEMP/candidate/MacSnap.app.zip" > "$RUNNER_TEMP/candidate/SHA256.txt"
+          python3 - <<'PY'
+          import hashlib, os, pathlib
+          root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'candidate'
+          names = ['MacSnap.app.zip', 'MacSnap.dmg']
+          (root / 'SHA256.txt').write_text(''.join(f'{hashlib.sha256((root / name).read_bytes()).hexdigest()}  {name}\n' for name in names))
+          PY
       - name: Upload unpublished draft for staging acceptance
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$RELEASE_TAG" --verify-tag --draft --title "MacSnap $RELEASE_TAG — candidate" --notes-file "$RUNNER_TEMP/candidate/notes.md"
-          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/candidate/MacSnap.app.zip" "$RUNNER_TEMP/candidate/appcast.xml" "$RUNNER_TEMP/candidate/SHA256.txt"
-          echo 'Draft only. Test this exact archive via staging, then run Publish Approved MacSnap Release with its SHA-256.' >> "$GITHUB_STEP_SUMMARY"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/candidate/MacSnap.app.zip" "$RUNNER_TEMP/candidate/MacSnap.dmg" "$RUNNER_TEMP/candidate/appcast.xml" "$RUNNER_TEMP/candidate/SHA256.txt"
+          echo 'Draft only. Test the ZIP update and DMG installation, then approve both SHA-256 digests in Publish Approved MacSnap Release.' >> "$GITHUB_STEP_SUMMARY"
           cat "$RUNNER_TEMP/candidate/SHA256.txt" >> "$GITHUB_STEP_SUMMARY"

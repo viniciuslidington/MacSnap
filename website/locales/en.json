@@ -93,11 +93,7 @@
     "ready_to_try_it": "READY TO TRY IT?",
     "a_small_app": "A small app.",
     "a_little_more_room": "A little more room.",
-    "download_and_unzip": "Download and unzip.",
-    "download_the_release_zip_and_extract": "Download the release ZIP and extract",
-    "macsnap_app": "MacSnap.app",
     "move_it_to_applications": "Move it to Applications.",
-    "move_the_app_to_your_applications_folder_and_open_macsna": "Move the app to your Applications folder and open MacSnap. You'll find it in the menu bar.",
     "allow_accessibility_access": "Allow Accessibility access.",
     "in_system_settings_privacy_security_accessibility_allow_": "In System Settings → Privacy & Security → Accessibility, allow MacSnap to arrange your windows.",
     "independently_distributed": "Independently distributed.",
@@ -160,5 +156,17 @@
     "hideLayouts": "Collapse snap layouts",
     "layoutSelected": "{label}. Illustrative layout demo.",
     "splitValue": "{first}% for your work, {second}% for your reference"
+  },
+  "installer": {
+    "zip": {
+      "first_title": "Download and unzip.",
+      "first_body": "Download the release ZIP and extract MacSnap.app.",
+      "second_body": "Move the app to your Applications folder and open MacSnap. You'll find it in the menu bar."
+    },
+    "dmg": {
+      "first_title": "Download and open.",
+      "first_body": "Download MacSnap.dmg and double-click it to open the installer.",
+      "second_body": "Drag MacSnap to the Applications shortcut in the installer. Open it from Applications, then eject the disk image. You'll find MacSnap in the menu bar."
+    }
   }
 }

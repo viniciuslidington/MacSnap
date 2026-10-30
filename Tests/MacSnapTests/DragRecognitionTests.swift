@@ -196,6 +196,49 @@ struct DragRecognitionTests {
 @MainActor
 @Suite(.serialized)
 struct GlobalEventMonitorIntegrationTests {
+    @Test func quarterToMaximizeAcrossLayoutGapKeepsPreviewAndDropInSync() async throws {
+        _ = NSApplication.shared
+        let existingWindows = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let fixture = try MonitorFixture()
+        let createdWindows = NSApplication.shared.windows.filter { !existingWindows.contains(ObjectIdentifier($0)) }
+        let bar = try #require(createdWindows.compactMap { $0 as? SnapLayoutBarWindow }.first)
+        let preview = try #require(createdWindows.compactMap { $0 as? PreviewOverlayWindow }.first)
+        defer {
+            fixture.cleanUp()
+            preview.orderOut(nil)
+        }
+        fixture.monitor.isTopSnapBarEnabled = true
+        fixture.monitor.isEdgeSnapEnabled = false
+        // Start with a settled pill so the test isolates crossing the card gap.
+        bar.presentPill(on: fixture.screen, animated: false)
+        fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: fixture.start)
+        fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: fixture.start.offsetBy(dx: 14))
+        bar.expand(animated: false)
+        bar.isPortrait = false
+        let quarter = try #require(bar.slotRect(at: 12))
+        let maximize = try #require(bar.slotRect(at: 13))
+        let quarterPoint = bar.convertPoint(toScreen: CGPoint(x: quarter.midX, y: quarter.midY))
+        let gapPoint = bar.convertPoint(toScreen: CGPoint(x: (quarter.maxX + maximize.minX) / 2, y: maximize.midY))
+        let maximizePoint = bar.convertPoint(toScreen: CGPoint(x: maximize.midX, y: maximize.midY))
+
+        await withCompletedAppKitAnimations {
+            fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: quarterPoint)
+        }
+        #expect(fixture.engine.previews.last == .bottomRightQuarter)
+        await withCompletedAppKitAnimations {
+            fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: gapPoint)
+            fixture.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: maximizePoint)
+        }
+
+        #expect(bar.currentlyHoveredSlotID == 13)
+        #expect(fixture.engine.previews.last == .maximize)
+        #expect(preview.isVisible && preview.alphaValue > 0.8)
+        #expect(preview.frame == fixture.screen.visibleFrame)
+        fixture.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: maximizePoint)
+        #expect(fixture.engine.drops.last?.zone == .maximize)
+        #expect(fixture.engine.drops.last?.exact == true)
+    }
+
     @Test func acceptedGestureUsesOneCandidateAndTheSnappingInterfaceForPreviewAndRelease() throws {
         let fixture = try MonitorFixture()
         defer { fixture.cleanUp() }

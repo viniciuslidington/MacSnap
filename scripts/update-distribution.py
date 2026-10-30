@@ -4,6 +4,7 @@ import argparse
 import base64
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -159,13 +160,20 @@ def assemble(args):
     (app / "Contents/MacOS").mkdir(parents=True)
     (app / "Contents/Resources").mkdir()
     shutil.copy2(args.binary, app / "Contents/MacOS/MacSnap")
+    helper = args.binary.parent / "MacSnapUninstaller"
+    require(helper.is_file(), "Build MacSnapUninstaller before assembling the app")
+    app_archs = set(subprocess.check_output(["lipo", "-archs", str(args.binary)], text=True).split())
+    helper_archs = set(subprocess.check_output(["lipo", "-archs", str(helper)], text=True).split())
+    require(app_archs.issubset(helper_archs), "Uninstaller does not support all app architectures")
+    (app / "Contents/Helpers").mkdir()
+    shutil.copy2(helper, app / "Contents/Helpers/MacSnapUninstaller")
     shutil.copy2(ROOT / "Resources/AppIcon.icns", app / "Contents/Resources/AppIcon.icns")
     framework = SPARKLE / "Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
     subprocess.run(["ditto", str(framework), str(app / "Contents/Frameworks/Sparkle.framework")], check=True)
     (app / "Contents/Resources/Sparkle-LICENSE.txt").write_bytes((SPARKLE / "LICENSE").read_bytes())
     (app / "Contents/Info.plist").write_bytes(plistlib.dumps(info))
     # Vendor helpers retain their original signatures and runtime flags. Sign outer layers last.
-    for path in [app / "Contents/Frameworks/Sparkle.framework", app]:
+    for path in [app / "Contents/Helpers/MacSnapUninstaller", app / "Contents/Frameworks/Sparkle.framework", app]:
         subprocess.run(["codesign", "--force", "--sign", args.identity, str(path)], check=True)
     subprocess.run(["codesign", "--verify", "--strict", "--deep", str(app)], check=True)
     linked = subprocess.check_output(["otool", "-l", str(app / "Contents/MacOS/MacSnap")], text=True)
@@ -230,6 +238,27 @@ def prepare(args):
     print("Prepared signed candidate feed. No release or feed was published.")
 
 
+def hydrate_downloads(site, release, receipt):
+    """Promote the installer only after its public bytes have a publication receipt."""
+    if "dmg_sha256" not in receipt or not (site / "index.html").is_file():
+        return
+    require(re.fullmatch(r"[a-f0-9]{64}", receipt["dmg_sha256"]), "Invalid DMG approval digest")
+    tag = release["tag_name"]
+    expected = f"https://github.com/{REPO}/releases/download/{tag}/MacSnap.dmg"
+    asset = next((a for a in release.get("assets", []) if a["name"] == "MacSnap.dmg"), None)
+    require(asset is not None and asset["browser_download_url"] == expected,
+            "Approved installer is missing from the release")
+    # Render both languages from their sources; no client-side API or JavaScript is needed.
+    spec = importlib.util.spec_from_file_location("site_locales", ROOT / "scripts/build-site-locales.py")
+    renderer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(renderer)
+    for path, content in renderer.render_all(release_tag=tag).items():
+        destination = site / path.relative_to(renderer.SITE)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content, encoding="utf-8")
+    print("Promoted approved DMG download and installation guidance in both languages.")
+
+
 def hydrate(args):
     target = args.site / "updates/appcast.xml"
     baseline = target.read_bytes()
@@ -267,7 +296,10 @@ def hydrate(args):
     offered = entries(candidate)
     require(offered and offered[max(offered)][0].findtext(f"{{{NS}}}shortVersionString") == tag[1:],
             "Latest-release feed/version disagreement")
-    target.write_bytes(apply_withdrawals(merge_feed(candidate, live)))
+    merged = apply_withdrawals(merge_feed(candidate, live))
+    if max(offered) not in withdrawn_builds():
+        hydrate_downloads(args.site, latest, receipt)
+    target.write_bytes(merged)
     print("Preserved approved feed in website deployment artifact.")
 
 

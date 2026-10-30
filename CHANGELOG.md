@@ -4,6 +4,8 @@
 
 ### Added
 
+- A branded, bilingual drag-to-Applications DMG installer, verified against the signed ZIP payload before publication; website downloads switch only after the DMG is approved and publicly verified.
+- Clean uninstallation from the status menu or Terminal, with confirmation, a read-only preview and cleanup of settings, caches, startup entries and app-specific permissions.
 - Sparkle updates from the status menu, with pending-version reminders, scheduled-check preferences and a separate automatic-download/install preference.
 - EdDSA-authenticated universal update archives, draft release preparation and explicit approval before feed publication.
 - Feed preservation across website deployments, stale-publication rejection and permanent withdrawal of affected builds.
@@ -12,6 +14,10 @@
 
 - Application shutdown waits for an active window drag or paired resize to finish.
 - Bundle assembly includes Sparkle and its license; the public installer preserves the shipped signature without removing quarantine or re-signing the app.
+
+### Fixed
+
+- Moving from a quarter-screen layout to Maximize across the gap between cards no longer lets a stale fade-out hide the new preview. The displayed target stays aligned with the layout applied on release.
 
 ### Release notes
 

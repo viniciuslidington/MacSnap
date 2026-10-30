@@ -16,6 +16,7 @@ struct UpdatePresentation: Equatable {
     var isAvailable = false
     var canCheck = false
     var pendingVersion: String?
+    var isUninstallSafe = true
 }
 
 /// Unbundled/development launches and menu tests need no updater or network access.
