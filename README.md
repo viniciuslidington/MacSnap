@@ -110,9 +110,12 @@ Sources/MacSnap/
 │   │   └── WindowFrameAccess.swift      # Validated native frame reads and writes
 │   ├── Screen/
 │   │   └── ScreenService.swift          # Screen discovery, orientation, and visible frames
-│   └── EventMonitoring/
-│       ├── GlobalEventMonitor.swift     # CGEventTap lifecycle and snap presentation
-│       └── DragRecognition.swift        # Drag admission, movement threshold, and rejection state
+│   ├── EventMonitoring/
+│   │   ├── GlobalEventMonitor.swift     # CGEventTap lifecycle and snap presentation
+│   │   └── DragRecognition.swift        # Drag admission, movement threshold, and rejection state
+│   └── Updating/
+│       ├── AppUpdating.swift            # App/menu update interface and unavailable-build adapter
+│       └── SparkleAppUpdater.swift      # Sparkle ownership, pending offers and safe termination
 │
 └── Features/
     ├── Snapping/
@@ -146,6 +149,9 @@ Coverage includes:
 - Independent visual slot highlighting across cards with identical target zones.
 - Automatic window adjacency detection and multi-monitor persistence.
 - Menu hover reset after clicking, closing, and reopening; accessibility press actions and disabled-action rejection while paused.
+- Update menu availability, pending versions, separate preferences and safe termination during window interactions.
+
+Run `python3 scripts/test-update-distribution.py` for archive metadata, real EdDSA verification, feed preservation, stale-publication rejection and withdrawal policies. Production release acceptance is tracked separately in [Automatic updates](docs/automatic-updates.md).
 
 ---
 
@@ -155,7 +161,7 @@ To clone and build locally:
 
 ### Requirements:
 - macOS 13.0 (Ventura) or later
-- Xcode 15+ or Command Line Tools with Swift 6 support
+- Xcode 16+ or Command Line Tools with Swift 6 support
 
 ```bash
 # 1. Clone repository
