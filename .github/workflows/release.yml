@@ -1,68 +1,69 @@
-name: Release MacSnap
-
+name: Prepare MacSnap Release
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag to build and publish
+        description: Existing tag to prepare as an unpublished candidate
         required: true
         type: string
-
 permissions:
   contents: write
-
+concurrency:
+  group: macsnap-release-candidate
+  cancel-in-progress: false
 jobs:
-  build:
-    name: Build Universal App and Release
+  prepare:
     runs-on: macos-15
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      MACSNAP_UPDATE_PUBLIC_KEY: ${{ vars.MACSNAP_UPDATE_PUBLIC_KEY }}
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.ref }}
-
-      - name: Select Xcode 16 (Swift 6)
-        uses: maxim-lobanov/setup-xcode@v1
+      - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '^16'
-
-      - name: Verify Swift Toolchain
-        run: swift --version
-
-      - name: Run Tests
-        run: swift test
-
-      - name: Build Universal Release Binary
-        run: swift build -c release --arch arm64 --arch x86_64
-
-      - name: Assemble MacSnap.app Bundle
+      - name: Validate candidate identity and configuration
         run: |
-          mkdir -p MacSnap.app/Contents/MacOS
-          mkdir -p MacSnap.app/Contents/Resources
-          # Resolve the final product rather than an architecture-specific intermediate.
+          python3 - <<'PY'
+          import base64, os, plistlib, re
+          info = plistlib.load(open('Resources/Info.plist', 'rb'))
+          tag = os.environ['RELEASE_TAG']
+          assert re.fullmatch(r'v\d+\.\d+\.\d+', tag), 'Invalid release tag'
+          assert tag == 'v' + info['CFBundleShortVersionString'], 'Tag/version mismatch'
+          assert len(base64.b64decode(os.environ['MACSNAP_UPDATE_PUBLIC_KEY'], validate=True)) == 32, 'Configure the public update key first'
+          PY
+      - name: Test app and distribution policies
+        run: |
+          swift test
+          python3 scripts/test-update-distribution.py
+      - name: Build universal application
+        run: |
+          swift build -c release --arch arm64 --arch x86_64
           RELEASE_BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/MacSnap"
           RELEASE_ARCHS="$(lipo -archs "$RELEASE_BIN")"
           [[ " $RELEASE_ARCHS " == *" arm64 "* ]]
           [[ " $RELEASE_ARCHS " == *" x86_64 "* ]]
-          cp "$RELEASE_BIN" MacSnap.app/Contents/MacOS/MacSnap
-          chmod +x MacSnap.app/Contents/MacOS/MacSnap
-          cp Resources/Info.plist MacSnap.app/Contents/Info.plist
-          if [ -f "Resources/AppIcon.icns" ]; then
-            cp Resources/AppIcon.icns MacSnap.app/Contents/Resources/AppIcon.icns
-          fi
-          codesign --force --deep --sign - MacSnap.app
-          codesign --verify --strict --deep MacSnap.app
-          zip -r -y MacSnap.app.zip MacSnap.app
-
-      - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: MacSnap.app.zip
-          tag_name: ${{ inputs.tag || github.ref_name }}
-          name: MacSnap ${{ inputs.tag || github.ref_name }}
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+          python3 scripts/update-distribution.py assemble --binary "$RELEASE_BIN" --output "$RUNNER_TEMP/candidate/MacSnap.app"
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/candidate/MacSnap.app" "$RUNNER_TEMP/candidate/MacSnap.app.zip"
+      - name: Generate release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$RELEASE_TAG" --jq .body > "$RUNNER_TEMP/candidate/notes.md"
+      - name: Sign and verify candidate feed
+        env:
+          MACSNAP_UPDATE_PRIVATE_KEY: ${{ secrets.MACSNAP_UPDATE_PRIVATE_KEY }}
+        run: |
+          python3 scripts/update-distribution.py prepare --archive "$RUNNER_TEMP/candidate/MacSnap.app.zip" --tag "$RELEASE_TAG" --notes "$RUNNER_TEMP/candidate/notes.md" --output "$RUNNER_TEMP/candidate/appcast.xml"
+          shasum -a 256 "$RUNNER_TEMP/candidate/MacSnap.app.zip" > "$RUNNER_TEMP/candidate/SHA256.txt"
+      - name: Upload unpublished draft for staging acceptance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$RELEASE_TAG" --verify-tag --draft --title "MacSnap $RELEASE_TAG — candidate" --notes-file "$RUNNER_TEMP/candidate/notes.md"
+          gh release upload "$RELEASE_TAG" "$RUNNER_TEMP/candidate/MacSnap.app.zip" "$RUNNER_TEMP/candidate/appcast.xml" "$RUNNER_TEMP/candidate/SHA256.txt"
+          echo 'Draft only. Test this exact archive via staging, then run Publish Approved MacSnap Release with its SHA-256.' >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/candidate/SHA256.txt" >> "$GITHUB_STEP_SUMMARY"

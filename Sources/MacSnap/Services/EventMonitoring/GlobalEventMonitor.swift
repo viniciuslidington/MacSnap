@@ -16,6 +16,9 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private var activeScreen: NSScreen?
     private var isZoneFromLayoutBar = false
 
+    /// Used by application shutdown to avoid interrupting a window gesture.
+    var hasActiveWindowInteraction: Bool { recognition.isDragging }
+
     private static let masterEnabledKey = "MacSnap.isMasterEnabled"
     private static let topSnapBarEnabledKey = "MacSnap.isTopSnapBarEnabled"
     private static let edgeSnapEnabledKey = "MacSnap.isEdgeSnapEnabled"

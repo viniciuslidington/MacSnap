@@ -24,3 +24,5 @@ jobs:
 
       - name: Run Unit Tests
         run: swift test
+      - name: Test update verification and publication policies
+        run: python3 scripts/test-update-distribution.py

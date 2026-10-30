@@ -3,6 +3,7 @@ import Cocoa
 @MainActor
 public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var menuBarController: MenuBarController?
+    private var appUpdater: (any AppUpdating)?
     private let accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared
     private let eventMonitor: EventMonitoringProtocol = GlobalEventMonitor.shared
     private var activationObserver: NSObjectProtocol?
@@ -12,7 +13,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         print("[MacSnap] Starting application...")
 
         // Initialize status bar menu
-        menuBarController = MenuBarController()
+        let updater = SparkleAppUpdater(installationIsBusy: {
+            GlobalEventMonitor.shared.hasActiveWindowInteraction ||
+                PairedResizeManager.shared.hasActiveResizeOperation || NSEvent.pressedMouseButtons != 0
+        })
+        appUpdater = updater
+        menuBarController = MenuBarController(appUpdater: updater)
 
         // Check accessibility permissions on launch
         let hasPermission = accessibilityService.isAccessibilityGranted(promptIfNeeded: true)
@@ -64,5 +70,12 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
         eventMonitor.stopMonitoring()
         PairedResizeManager.shared.clearPairing()
         print("[MacSnap] Quitting application.")
+    }
+
+    public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if appUpdater?.deferTermination(resume: {
+            sender.reply(toApplicationShouldTerminate: true)
+        }) == true { return .terminateLater }
+        return .terminateNow
     }
 }
