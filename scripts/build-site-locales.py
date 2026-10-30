@@ -16,7 +16,9 @@ UI_KEYS = {"copySuccess", "copyFailure", "copied", "showLayouts", "hideLayouts",
            "layoutSelected", "splitValue"}
 
 
-def render_all():
+def render_all(release_tag=None):
+    if release_tag is not None:
+        assert re.fullmatch(r"v\d+\.\d+\.\d+", release_tag), "Invalid download release tag"
     template = (SOURCE / "template.html").read_text(encoding="utf-8")
     locales = {
         lang: json.loads((SOURCE / "locales" / f"{lang}.json").read_text(encoding="utf-8"))
@@ -33,7 +35,10 @@ def render_all():
         assert all(isinstance(s, str) and s.strip() for s in data["ui"].values())
         assert set(re.findall(r"\{(\w+)\}", data["ui"]["layoutSelected"])) == {"label"}
         assert set(re.findall(r"\{(\w+)\}", data["ui"]["splitValue"])) == {"first", "second"}
-        data = dict(data, canonical=PRODUCTION + route,
+        installer = data["installer"]["dmg" if release_tag else "zip"]
+        download_url = (f"https://github.com/viniciuslidington/MacSnap/releases/download/{release_tag}/MacSnap.dmg"
+                        if release_tag else "https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip")
+        data = dict(data, installer=installer, download_url=download_url, canonical=PRODUCTION + route,
                     asset_prefix="../" if route else "",
                     alternate_og_locale="pt_BR" if lang == "en" else "en_US",
                     social_image=PRODUCTION + "assets/social-preview" + ("-pt" if route else "") + ".png",

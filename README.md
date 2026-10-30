@@ -13,6 +13,12 @@ Update-channel implementation and release readiness are documented in [Automatic
 
 ---
 
+## Install with drag and drop
+
+DMG packaging is prepared for the next release. Download **MacSnap.dmg**, open it and drag MacSnap onto the **Applications** shortcut. Open the app from Applications, then eject the disk image. This keeps the installed app out of Downloads and off the read-only installer volume.
+
+The website switches to the DMG only after that artifact is published and verified; the current public 1.0.7 download remains a ZIP. ZIP archives are also retained for Sparkle updates and the Terminal installer. [Build, verification and release steps](docs/dmg-installer.md).
+
 ## ⚡ Quick Command-Line Installation
 
 To install **MacSnap** on your Mac in seconds, open **Terminal** and run:

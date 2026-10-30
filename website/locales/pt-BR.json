@@ -93,11 +93,7 @@
     "ready_to_try_it": "PRONTO PARA EXPERIMENTAR?",
     "a_small_app": "Um pequeno app.",
     "a_little_more_room": "Um novo espaço.",
-    "download_and_unzip": "Baixe e extraia.",
-    "download_the_release_zip_and_extract": "Baixe o ZIP da release e extraia o",
-    "macsnap_app": "MacSnap.app",
     "move_it_to_applications": "Leve para Aplicativos.",
-    "move_the_app_to_your_applications_folder_and_open_macsna": "Mova o app para a pasta Aplicativos e abra o MacSnap. Ele fica na barra de menus.",
     "allow_accessibility_access": "Permita Acessibilidade.",
     "in_system_settings_privacy_security_accessibility_allow_": "Em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade, autorize o MacSnap a organizar as janelas.",
     "independently_distributed": "Uma distribuição independente.",
@@ -160,5 +156,17 @@
     "hideLayouts": "Recolher layouts de encaixe",
     "layoutSelected": "{label}. Demonstração ilustrativa dos layouts.",
     "splitValue": "{first}% para o trabalho, {second}% para a referência"
+  },
+  "installer": {
+    "zip": {
+      "first_title": "Baixe e extraia.",
+      "first_body": "Baixe o ZIP da release e extraia o MacSnap.app.",
+      "second_body": "Mova o app para a pasta Aplicativos e abra o MacSnap. Ele fica na barra de menus."
+    },
+    "dmg": {
+      "first_title": "Baixe e abra.",
+      "first_body": "Baixe o MacSnap.dmg e dê dois cliques para abrir o instalador.",
+      "second_body": "Arraste o MacSnap para o atalho de Aplicativos no instalador. Abra o app pela pasta Aplicativos e ejete a imagem de disco. O MacSnap fica na barra de menus."
+    }
   }
 }

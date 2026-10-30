@@ -10,6 +10,10 @@ on:
         description: SHA-256 of the tested archive (running this approves public distribution)
         required: true
         type: string
+      dmg_sha256:
+        description: SHA-256 of the tested drag-to-Applications installer
+        required: true
+        type: string
 permissions:
   contents: write
 concurrency:
@@ -21,6 +25,7 @@ jobs:
     env:
       RELEASE_TAG: ${{ inputs.tag }}
       APPROVED_SHA256: ${{ inputs.archive_sha256 }}
+      APPROVED_DMG_SHA256: ${{ inputs.dmg_sha256 }}
       MACSNAP_UPDATE_PUBLIC_KEY: ${{ vars.MACSNAP_UPDATE_PUBLIC_KEY }}
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -28,25 +33,36 @@ jobs:
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: '^16'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install isolated disk image verification tooling
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmg-tools"
+          "$RUNNER_TEMP/dmg-tools/bin/python" -m pip install -r scripts/requirements-dmg.txt
       - name: Validate approval and candidate availability
         run: |
           python3 - <<'PY'
           import os, re
           assert re.fullmatch(r'v\d+\.\d+\.\d+', os.environ['RELEASE_TAG']), 'Invalid tag'
           assert re.fullmatch(r'[a-fA-F0-9]{64}', os.environ['APPROVED_SHA256']), 'Invalid digest'
+          assert re.fullmatch(r'[a-fA-F0-9]{64}', os.environ['APPROVED_DMG_SHA256']), 'Invalid installer digest'
           PY
           mkdir -p "$RUNNER_TEMP/approved"
-          gh release download "$RELEASE_TAG" --pattern MacSnap.app.zip --pattern appcast.xml --dir "$RUNNER_TEMP/approved"
+          gh release download "$RELEASE_TAG" --pattern MacSnap.app.zip --pattern MacSnap.dmg --pattern appcast.xml --dir "$RUNNER_TEMP/approved"
       - name: Verify approved archive and signatures
         run: |
           python3 - <<'PY'
           import hashlib, os, pathlib
           archive = pathlib.Path(os.environ['RUNNER_TEMP']) / 'approved/MacSnap.app.zip'
           assert hashlib.sha256(archive.read_bytes()).hexdigest() == os.environ['APPROVED_SHA256'].lower(), 'Candidate differs from tested artifact'
+          image = archive.with_name('MacSnap.dmg')
+          assert hashlib.sha256(image.read_bytes()).hexdigest() == os.environ['APPROVED_DMG_SHA256'].lower(), 'Installer differs from tested artifact'
           PY
           python3 scripts/update-distribution.py verify --archive "$RUNNER_TEMP/approved/MacSnap.app.zip" --feed "$RUNNER_TEMP/approved/appcast.xml" --tag "$RELEASE_TAG"
           ditto -x -k "$RUNNER_TEMP/approved/MacSnap.app.zip" "$RUNNER_TEMP/extracted"
           codesign --verify --strict --deep "$RUNNER_TEMP/extracted/MacSnap.app"
+          "$RUNNER_TEMP/dmg-tools/bin/python" scripts/build-dmg.py verify --app "$RUNNER_TEMP/extracted/MacSnap.app" --image "$RUNNER_TEMP/approved/MacSnap.dmg"
       - name: Reject stale feed promotion
         run: python3 scripts/update-distribution.py check-promotion --feed "$RUNNER_TEMP/approved/appcast.xml"
       - name: Publish the already tested candidate
@@ -55,10 +71,13 @@ jobs:
         run: |
           curl --fail --location --retry 3 "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/MacSnap.app.zip" --output "$RUNNER_TEMP/public.zip"
           cmp "$RUNNER_TEMP/public.zip" "$RUNNER_TEMP/approved/MacSnap.app.zip"
+          curl --fail --location --retry 3 "https://github.com/$GITHUB_REPOSITORY/releases/download/$RELEASE_TAG/MacSnap.dmg" --output "$RUNNER_TEMP/public.dmg"
+          cmp "$RUNNER_TEMP/public.dmg" "$RUNNER_TEMP/approved/MacSnap.dmg"
           python3 - <<'PY'
           import hashlib, json, os, pathlib
           root = pathlib.Path(os.environ['RUNNER_TEMP']) / 'approved'
           receipt = {'tag': os.environ['RELEASE_TAG'], 'archive_sha256': os.environ['APPROVED_SHA256'].lower(),
+                     'dmg_sha256': os.environ['APPROVED_DMG_SHA256'].lower(),
                      'appcast_sha256': hashlib.sha256((root / 'appcast.xml').read_bytes()).hexdigest()}
           (root / 'update-approval.json').write_text(json.dumps(receipt, sort_keys=True) + '\n')
           PY

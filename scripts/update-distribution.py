@@ -4,6 +4,7 @@ import argparse
 import base64
 import copy
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -237,6 +238,27 @@ def prepare(args):
     print("Prepared signed candidate feed. No release or feed was published.")
 
 
+def hydrate_downloads(site, release, receipt):
+    """Promote the installer only after its public bytes have a publication receipt."""
+    if "dmg_sha256" not in receipt or not (site / "index.html").is_file():
+        return
+    require(re.fullmatch(r"[a-f0-9]{64}", receipt["dmg_sha256"]), "Invalid DMG approval digest")
+    tag = release["tag_name"]
+    expected = f"https://github.com/{REPO}/releases/download/{tag}/MacSnap.dmg"
+    asset = next((a for a in release.get("assets", []) if a["name"] == "MacSnap.dmg"), None)
+    require(asset is not None and asset["browser_download_url"] == expected,
+            "Approved installer is missing from the release")
+    # Render both languages from their sources; no client-side API or JavaScript is needed.
+    spec = importlib.util.spec_from_file_location("site_locales", ROOT / "scripts/build-site-locales.py")
+    renderer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(renderer)
+    for path, content in renderer.render_all(release_tag=tag).items():
+        destination = site / path.relative_to(renderer.SITE)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content, encoding="utf-8")
+    print("Promoted approved DMG download and installation guidance in both languages.")
+
+
 def hydrate(args):
     target = args.site / "updates/appcast.xml"
     baseline = target.read_bytes()
@@ -274,7 +296,10 @@ def hydrate(args):
     offered = entries(candidate)
     require(offered and offered[max(offered)][0].findtext(f"{{{NS}}}shortVersionString") == tag[1:],
             "Latest-release feed/version disagreement")
-    target.write_bytes(apply_withdrawals(merge_feed(candidate, live)))
+    merged = apply_withdrawals(merge_feed(candidate, live))
+    if max(offered) not in withdrawn_builds():
+        hydrate_downloads(args.site, latest, receipt)
+    target.write_bytes(merged)
     print("Preserved approved feed in website deployment artifact.")
 
 

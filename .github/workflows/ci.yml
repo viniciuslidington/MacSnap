@@ -26,3 +26,19 @@ jobs:
         run: swift test
       - name: Test update verification and publication policies
         run: python3 scripts/test-update-distribution.py
+      - name: Test installer rollout policies
+        run: python3 scripts/test-dmg-distribution.py
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Smoke test signed app packaging and drag-to-Applications installer
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmg-tools"
+          "$RUNNER_TEMP/dmg-tools/bin/python" -m pip install -r scripts/requirements-dmg.txt
+          swift build -c release
+          PACKAGE_BIN="$(swift build -c release --show-bin-path)/MacSnap"
+          python3 scripts/update-distribution.py assemble --binary "$PACKAGE_BIN" --output "$RUNNER_TEMP/package/MacSnap.app" --allow-unconfigured
+          ditto -c -k --sequesterRsrc --keepParent "$RUNNER_TEMP/package/MacSnap.app" "$RUNNER_TEMP/package/MacSnap.app.zip"
+          "$RUNNER_TEMP/dmg-tools/bin/python" scripts/build-dmg.py build --app "$RUNNER_TEMP/package/MacSnap.app" --image "$RUNNER_TEMP/package/MacSnap.dmg"
+          ditto -x -k "$RUNNER_TEMP/package/MacSnap.app.zip" "$RUNNER_TEMP/unzipped"
+          "$RUNNER_TEMP/dmg-tools/bin/python" scripts/build-dmg.py verify --app "$RUNNER_TEMP/unzipped/MacSnap.app" --image "$RUNNER_TEMP/package/MacSnap.dmg"

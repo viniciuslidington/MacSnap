@@ -12,6 +12,7 @@ on:
         "scripts/test-site-motion.cjs",
         "scripts/update-distribution.py",
         "scripts/test-update-distribution.py",
+        "scripts/test-dmg-distribution.py",
         ".github/workflows/pages.yml",
       ]
   pull_request:
@@ -25,6 +26,7 @@ on:
         "scripts/test-site-motion.cjs",
         "scripts/update-distribution.py",
         "scripts/test-update-distribution.py",
+        "scripts/test-dmg-distribution.py",
         ".github/workflows/pages.yml",
       ]
   workflow_dispatch:
@@ -58,6 +60,8 @@ jobs:
         run: node --test scripts/test-site-motion.cjs
       - name: Check update feed publication policies
         run: python3 scripts/test-update-distribution.py
+      - name: Check installer rollout policies
+        run: python3 scripts/test-dmg-distribution.py
 
   deploy:
     name: Publish GitHub Pages
