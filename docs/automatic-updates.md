@@ -6,7 +6,7 @@ This implementation uses Sparkle 2.10.1 with EdDSA-authenticated archives and th
 
 The updater integration and release tooling are implemented locally. The maintainer generated the production key and configured the GitHub Actions variable `MACSNAP_UPDATE_PUBLIC_KEY` and secret `MACSNAP_UPDATE_PRIVATE_KEY`. Their presence and the public value were checked; the private secret is not readable through GitHub and its signing pair still needs verification by the trusted candidate workflow. No updater-enabled release has been approved, and the checked-in feed intentionally contains no updates. Builds without a configured public key keep updating unavailable and do not start Sparkle.
 
-The next candidate is **1.0.8, build 8**. This prepares version metadata for review; it does not create a tag or publish a release.
+The fullscreen fix candidate is **1.0.9, build 9**, following the first updater candidate 1.0.8. This prepares version metadata for review; it does not create a tag or publish a release.
 
 The local 1.0.8 candidate was assembled with the configured production public key, archived, extracted and recursively code-signature verified. Both architecture slices are present. Its archive has not been signed with the production private key; that verification remains part of trusted release preparation. The local SHA-256 and verification receipt are kept in ignored build output, not offered to clients.
 
