@@ -165,6 +165,7 @@ public final class PairedResizeManager {
     /// and physically adjacent along their shared seam on screen.
     public func isPairValidAndAdjacent(_ pair: PairedSplit) -> Bool {
         guard !pair.firstWindow.isSameWindow(as: pair.secondWindow),
+              pair.firstWindow.isResizable, pair.secondWindow.isResizable,
               let first = pair.firstWindow.cocoaFrame(primaryScreenHeight: screenService.primaryScreenHeight),
               let second = pair.secondWindow.cocoaFrame(primaryScreenHeight: screenService.primaryScreenHeight),
               let split = PairGeometry.split(first: first, second: second, in: pair.visibleFrame, gapTolerance: 40) else { return false }
@@ -307,6 +308,7 @@ public final class PairedResizeManager {
 
     private func adoptPair(_ first: WindowElement, _ second: WindowElement, visibleFrame: CGRect, in state: ScreenPairState) -> PairedSplit? {
         guard !first.isSameWindow(as: second),
+              first.isResizable, second.isResizable,
               let firstFrame = first.cocoaFrame(primaryScreenHeight: screenService.primaryScreenHeight),
               let secondFrame = second.cocoaFrame(primaryScreenHeight: screenService.primaryScreenHeight),
               let split = PairGeometry.split(first: firstFrame, second: secondFrame, in: visibleFrame) else { return nil }

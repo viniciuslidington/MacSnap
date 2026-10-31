@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.9] - Unreleased
+
+### Fixed
+
+- Full-screen and fixed-size windows no longer activate snap previews or paired resizing. Entering full screen cancels captured gestures and deferred writes, and stale dividers stop intercepting clicks.
+
 ## [1.0.8] - Unreleased
 
 ### Added

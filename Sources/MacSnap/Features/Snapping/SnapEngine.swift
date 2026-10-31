@@ -45,7 +45,8 @@ public final class SnapEngine: WindowSnappingProtocol {
 
     public func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool = false) {
         cancelPendingOperations()
-        guard let connected = screenService.screens.first(where: { $0.displayID == screen.displayID }) else { return }
+        guard window.isResizable,
+              let connected = screenService.screens.first(where: { $0.displayID == screen.displayID }) else { return }
         let target = previewRect(for: window, to: zone, on: connected, forceExactSize: forceExactSize)
         guard window.setCocoaFrame(target, primaryScreenHeight: screenService.primaryScreenHeight) else { return }
         // Registration observes actual geometry, never recalculates an adaptive target or resizes a neighbor.
@@ -55,9 +56,10 @@ public final class SnapEngine: WindowSnappingProtocol {
     public func completeDrag(window: WindowElement?, zone: SnapZone?, screen: NSScreen?, forceExactSize: Bool) {
         cancelPendingOperations()
         guard let screen else { return }
+        if let window, !window.isResizable { return }
         if let window, let zone {
             schedule(after: 0.03) { [weak self] in
-                guard let self else { return }
+                guard let self, window.isResizable else { return }
                 self.snapWindow(window, to: zone, on: screen, forceExactSize: forceExactSize)
                 self.scheduleRefresh(on: screen)
             }

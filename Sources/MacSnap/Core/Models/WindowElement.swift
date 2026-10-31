@@ -102,7 +102,7 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
     /// - Returns: Bool indicating whether the update was accepted.
     @discardableResult
     public func setAXFrame(_ newAXFrame: CGRect) -> Bool {
-        guard AXWindowFrameAccess.isUsable(newAXFrame) else { return false }
+        guard AXWindowFrameAccess.isUsable(newAXFrame), isResizable else { return false }
         return frameAccess.setFrame(newAXFrame)
     }
 
@@ -113,9 +113,14 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
         return setAXFrame(axFrame)
     }
 
-    /// Checks if the window supports resizing.
+    /// Native full-screen state, read afresh so transitions invalidate captured interactions.
+    public var isFullScreen: Bool {
+        frameAccess.isFullScreen
+    }
+
+    /// Checks whether MacSnap can currently resize the window, including its full-screen state.
     public var isResizable: Bool {
-        frameAccess.isResizable
+        !isFullScreen && frameAccess.isResizable
     }
 
     /// Determines if a point in Cocoa coordinates falls within the upper header/tab bar region of this window.

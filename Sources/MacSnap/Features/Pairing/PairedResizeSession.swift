@@ -95,7 +95,8 @@ final class PairedResizeSession {
     }
 
     private func observedFrames() -> (CGRect, CGRect)? {
-        guard let first = pair.firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight),
+        guard pair.firstWindow.isResizable, pair.secondWindow.isResizable,
+              let first = pair.firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight),
               let second = pair.secondWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight),
               valid(first), valid(second) else { return nil }
         return (first, second)

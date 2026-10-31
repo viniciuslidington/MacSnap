@@ -689,6 +689,7 @@ private final class PairingTestFrameAccess: WindowFrameAccess, @unchecked Sendab
 
     var frame: CGRect? { lock.withLock { storedFrame } }
     var isResizable: Bool { true }
+    var isFullScreen: Bool { false }
     func setFrame(_ frame: CGRect) -> Bool {
         guard acceptsWrites else { return false }
         lock.withLock { storedFrame = frame }
