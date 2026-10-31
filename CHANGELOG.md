@@ -17,6 +17,7 @@
 
 ### Fixed
 
+- Full-screen and fixed-size windows no longer activate snap previews or paired resizing. Entering full screen cancels captured gestures and deferred writes, and stale dividers stop intercepting clicks.
 - Moving from a quarter-screen layout to Maximize across the gap between cards no longer lets a stale fade-out hide the new preview. The displayed target stays aligned with the layout applied on release.
 
 ### Release notes

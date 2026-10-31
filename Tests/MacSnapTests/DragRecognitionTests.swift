@@ -239,6 +239,52 @@ struct GlobalEventMonitorIntegrationTests {
         #expect(fixture.engine.drops.last?.exact == true)
     }
 
+    @Test(arguments: [false, true])
+    func ineligibleWindowStaysIgnoredUntilRelease(isFullScreen: Bool) throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.frames.isFullScreen = isFullScreen
+        f.frames.isResizable = isFullScreen
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.frames.isFullScreen = false
+        f.frames.isResizable = true
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.previews.isEmpty)
+        #expect(f.engine.drops.isEmpty)
+
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.drops.count == 1)
+    }
+
+    @Test(arguments: [false, true])
+    func enteringFullScreenCancelsCapturedGesture(wasDragging: Bool) throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        if wasDragging { f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge) }
+        let previews = f.engine.previews.count
+        f.frames.isFullScreen = true
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        f.frames.isFullScreen = false
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.previews.count == previews)
+        #expect(f.engine.drops.isEmpty)
+    }
+
+    @Test func enteringFullScreenImmediatelyBeforeReleaseCancelsDrop() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        f.frames.isFullScreen = true
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.drops.isEmpty)
+    }
+
     @Test func acceptedGestureUsesOneCandidateAndTheSnappingInterfaceForPreviewAndRelease() throws {
         let fixture = try MonitorFixture()
         defer { fixture.cleanUp() }
@@ -383,6 +429,7 @@ struct GlobalEventMonitorIntegrationTests {
 private final class MonitorFixture {
     let screen: NSScreen
     let window: WindowElement
+    let frames: MonitorTestFrameAccess
     let access: MonitorTestAccessibility
     let engine: MonitorTestSnapEngine
     let discovery: MonitorTestDiscovery
@@ -411,7 +458,7 @@ private final class MonitorFixture {
         body = CGPoint(x: frame.midX, y: frame.midY)
         edge = CGPoint(x: visible.minX + 1, y: visible.midY)
         edgeZone = screen.isPortrait ? .middleThird : .leftHalf
-        let frames = MonitorTestFrameAccess(frame: ScreenGeometry.cocoaToAX(cocoaRect: frame, primaryScreenHeight: screen.frame.height))
+        frames = MonitorTestFrameAccess(frame: ScreenGeometry.cocoaToAX(cocoaRect: frame, primaryScreenHeight: screen.frame.height))
         window = WindowElement(element: AXUIElementCreateSystemWide(), pid: ProcessInfo.processInfo.processIdentifier + 1, frameAccess: frames, identity: UUID())
         access = MonitorTestAccessibility(window: window)
         engine = MonitorTestSnapEngine()
@@ -440,9 +487,20 @@ private extension CGPoint {
     func offsetBy(dx: CGFloat) -> CGPoint { CGPoint(x: x + dx, y: y) }
 }
 
-private struct MonitorTestFrameAccess: WindowFrameAccess {
+private final class MonitorTestFrameAccess: WindowFrameAccess, @unchecked Sendable {
     let frame: CGRect?
-    var isResizable: Bool { true }
+    private let lock = NSLock()
+    private var fullScreen = false
+    private var resizable = true
+    init(frame: CGRect) { self.frame = frame }
+    var isFullScreen: Bool {
+        get { lock.withLock { fullScreen } }
+        set { lock.withLock { fullScreen = newValue } }
+    }
+    var isResizable: Bool {
+        get { lock.withLock { resizable } }
+        set { lock.withLock { resizable = newValue } }
+    }
     func setFrame(_ frame: CGRect) -> Bool { false }
 }
 

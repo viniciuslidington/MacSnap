@@ -5,6 +5,42 @@ import Testing
 
 @MainActor
 struct PairedResizeSessionTests {
+    @Test(arguments: [false, true])
+    func fullScreenMemberPreventsPairWrites(firstIsFullScreen: Bool) {
+        let f = ResizeFixture()
+        let access = firstIsFullScreen ? f.firstAccess : f.secondAccess
+        access.isFullScreen = true
+        #expect(!f.pair.applyCurrentSplit(primaryScreenHeight: 1000))
+        #expect(f.writes.names.isEmpty)
+        #expect(!f.session.begin())
+        #expect(f.presentation.presentations == 0)
+        #expect(f.session.phase == .invalidated)
+    }
+
+    @Test func enteringFullScreenDuringResizeInvalidatesWithoutWritingEitherWindow() {
+        let f = ResizeFixture()
+        #expect(f.session.begin())
+        f.session.update(to: 1200)
+        f.firstAccess.isFullScreen = true
+        f.session.finish()
+        #expect(f.session.phase == .invalidated)
+        #expect(f.writes.names.isEmpty)
+        #expect(f.reference.invalidations == 1)
+    }
+
+    @Test func enteringFullScreenBeforeSettlementPreventsPartnerCorrection() {
+        let f = ResizeFixture(firstMinimum: CGSize(width: 900, height: 0))
+        #expect(f.session.begin())
+        f.session.update(to: 600)
+        f.session.finish()
+        #expect(f.session.phase == .settling)
+        let writes = f.writes.names
+        f.firstAccess.isFullScreen = true
+        f.scheduler.runAll()
+        #expect(f.session.phase == .invalidated)
+        #expect(f.writes.names == writes)
+    }
+
     @Test func draggingChangesOnlyPreviewThenReleaseCommitsAndSettles() {
         let f = ResizeFixture()
         #expect(f.session.begin())
@@ -349,6 +385,7 @@ private final class ResizeFrameAccess: WindowFrameAccess, @unchecked Sendable {
     private let lock = NSLock()
     private var storedFrame: CGRect?
     private var storedRejectWrites = false
+    private var fullScreen = false
     private let name: String
     private let minimum: CGSize
     private let writes: ResizeWriteLog
@@ -362,6 +399,10 @@ private final class ResizeFrameAccess: WindowFrameAccess, @unchecked Sendable {
 
     var frame: CGRect? { lock.withLock { storedFrame } }
     var isResizable: Bool { true }
+    var isFullScreen: Bool {
+        get { lock.withLock { fullScreen } }
+        set { lock.withLock { fullScreen = newValue } }
+    }
     var rejectWrites: Bool {
         get { lock.withLock { storedRejectWrites } }
         set { lock.withLock { storedRejectWrites = newValue } }

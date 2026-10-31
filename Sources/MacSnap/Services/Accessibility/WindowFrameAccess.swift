@@ -5,6 +5,7 @@ import Foundation
 /// The internal seam for window frame I/O. Coordinates use the Accessibility convention.
 protocol WindowFrameAccess: Sendable {
     var frame: CGRect? { get }
+    var isFullScreen: Bool { get }
     var isResizable: Bool { get }
     /// Acceptance of the native writes does not imply that the application reached the target.
     func setFrame(_ frame: CGRect) -> Bool
@@ -30,6 +31,14 @@ final class AXWindowFrameAccess: WindowFrameAccess, @unchecked Sendable {
         return Self.isUsable(rect) ? rect : nil
     }
 
+    var isFullScreen: Bool {
+        var value: CFTypeRef?
+        // AXFullScreen has no SDK constant and is not exposed by every application.
+        // Unsupported attributes retain the normal AX size-capability check.
+        guard AXUIElementCopyAttributeValue(element, "AXFullScreen" as CFString, &value) == .success else { return false }
+        return (value as? Bool) == true
+    }
+
     var isResizable: Bool {
         var settable: DarwinBoolean = false
         return AXUIElementIsAttributeSettable(element, kAXSizeAttribute as CFString, &settable) == .success
@@ -46,6 +55,7 @@ final class AXWindowFrameAccess: WindowFrameAccess, @unchecked Sendable {
         // Move before resizing to avoid clamping expansion against the previous position.
         // Every write must be accepted; failed native calls must not register a successful snap.
         func apply() -> Bool {
+            guard !isFullScreen else { return false }
             guard AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, positionValue) == .success else { return false }
             return AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue) == .success
         }

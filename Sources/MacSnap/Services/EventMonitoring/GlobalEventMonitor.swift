@@ -171,6 +171,10 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         let began = recognition.drag(at: point, visibleFrame: screen.visibleFrame) {
             resolveCandidate(at: point)
         }
+        if let window = recognition.window, !window.isResizable {
+            resetDragInteraction(ignoringUntilRelease: true)
+            return
+        }
         if began {
             snapEngine.cancelPendingOperations()
             if let window = recognition.window { pairingManager.unpairWindow(window) }
@@ -298,7 +302,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             window = focused
             frame = focusedFrame
         }
-        guard let window,
+        guard let window, window.isResizable,
               let frame = frame ?? window.cocoaFrame(primaryScreenHeight: primaryHeight) else { return nil }
         return .init(
             window: window, frame: frame, isDesktop: window.isDesktopWindow,
@@ -307,6 +311,10 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     }
 
     private func handleRelease(at point: CGPoint) {
+        if let window = recognition.window, !window.isResizable {
+            resetDragInteraction()
+            return
+        }
         // A retained NSScreen is not proof that its display is still connected.
         if let activeScreen,
            !screenService.screens.contains(where: { $0.displayID == activeScreen.displayID }) {

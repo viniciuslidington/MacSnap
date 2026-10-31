@@ -17,6 +17,9 @@ Para escolher o certificado de assinatura, defina `MACSNAP_SIGNING_IDENTITY` ao 
 | Cenário | Verificar |
 |---|---|
 | Quick Snap: Left, Right, Max, Center | A janela correta ocupa o retângulo escolhido; o menu continua neutro, com cor nos toggles. Reabrir não mantém hover antigo. |
+| Tela cheia nativa (botão verde ou Control–Command–F) | Arrastar o cabeçalho até uma borda não abre barra/prévia nem aplica encaixe. Quick Snap também não altera a janela. Ao sair da tela cheia, um novo gesto funciona normalmente. |
+| Entrar em tela cheia durante encaixe ou ajuste pelo divisor | O gesto é cancelado; barra, prévia e divisor deixam de interagir. Ações atrasadas não redimensionam a janela nem sua parceira. |
+| Janela maximizada e janela sem suporte a redimensionamento | A maximizada continua elegível para encaixe. A janela com tamanho fixo não abre barra/prévia nem é escolhida para um par. |
 | Barra de layouts, cartão exato | A prévia e o encaixe respeitam a divisão explícita, mesmo ao lado de janela com tamanho personalizado. |
 | Borda com vizinho já posicionado | O alvo se ajusta ao espaço disponível quando há vizinho elegível. Não redimensiona outro aplicativo para fabricar um par. |
 | Três colunas | Posicionar esquerda, centro e direita não força duas colunas a ocupar a tela inteira. |
@@ -40,8 +43,12 @@ Para escolher o certificado de assinatura, defina `MACSNAP_SIGNING_IDENTITY` ao 
 
 Os testes de lógica usam janelas, observações e tempo controlados. Os testes de integração acionam o mesmo handler MainActor do monitor e os callbacks de apresentação, sem mover as janelas pessoais do usuário. A ordem e entrega real dos callbacks de `CGEventTap`, a resposta de cada aplicativo, VoiceOver e configurações reais de múltiplos monitores dependem deste smoke test.
 
+A detecção consulta `AXFullScreen` em cada validação da janela, além de verificar se `AXSize` aceita escrita. Esse atributo não tem constante pública no SDK e pode não ser exposto por todos os aplicativos ([referência no AXSwift](https://github.com/tmandry/AXSwift/blob/main/Sources/Constants.swift)). Quando indisponível, permanece a verificação de capacidade de redimensionamento. O tamanho da janela não é usado como indicação de tela cheia, para preservar o encaixe de janelas maximizadas.
+
 ## Registro do resultado
 
 Registrar quais cenários foram executados, aplicativos/monitores usados e qualquer diferença entre prévia e resultado. Não incluir títulos de documentos ou dados pessoais em logs compartilhados. Cenários sem equipamento disponível devem ser identificados como não testados, sem alegar cobertura completa.
 
 Validação automática de 29/10/2026: 81 testes aprovados e build universal assinado, com versão 1.0.7/build 7. A publicação da branch e do PR foi autorizada; os resultados específicos deste roteiro manual ainda não foram registrados.
+
+Validação automática de 31/10/2026 para tela cheia: inicialmente, 92 testes aprovados em 8 suítes e build universal arm64 + x86_64 assinado e verificado. Após incorporar a `main` atualizada para preparar o PR, 110 testes passaram em 11 suítes, junto dos 20 testes de distribuição de atualizações e dos 4 testes de distribuição do instalador. A falha era a ausência de consulta ao estado de tela cheia e de uso da capacidade de redimensionamento nos fluxos de interação. As regressões cobrem admissão e cancelamento do arraste, encaixe adiado, ajuste e correção de pares e cliques sobre um divisor antigo. Os novos cenários com aplicativos reais ainda não foram executados; a preparação do PR não instala nem inicia um build de teste.

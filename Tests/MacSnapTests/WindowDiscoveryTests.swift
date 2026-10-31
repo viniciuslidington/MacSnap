@@ -272,6 +272,7 @@ private final class DiscoveryFrameAccess: WindowFrameAccess, @unchecked Sendable
     private var writeCount = 0
     private let acceptsWrites: Bool
     let isResizable = true
+    let isFullScreen = false
 
     init(frame: CGRect?, acceptsWrites: Bool = true) {
         self.storedFrame = frame

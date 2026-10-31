@@ -7,6 +7,89 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct SnapEngineTests {
+    @Test func fullScreenWindowRejectsSnappingEvenWhenAXSizeIsSettable() throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let moving = f.window(f.screen.visibleFrame)
+        moving.1.isFullScreen = true
+
+        #expect(!moving.0.isResizable)
+        #expect(!moving.0.setAXFrame(CGRect(x: 0, y: 0, width: 600, height: 500)))
+        f.engine.snapWindow(moving.0, to: .leftHalf, on: f.screen, forceExactSize: true)
+        f.engine.completeDrag(window: moving.0, zone: .leftHalf, screen: f.screen, forceExactSize: true)
+        f.clock.deliverAllIncludingCancelled()
+        f.clock.deliverAllIncludingCancelled()
+
+        #expect(moving.1.writes == 0)
+        #expect(f.discovery.snapshotCount == 0)
+        #expect(f.manager.activePairs.isEmpty)
+
+        moving.1.isFullScreen = false
+        f.engine.snapWindow(moving.0, to: .leftHalf, on: f.screen, forceExactSize: true)
+        #expect(moving.1.writes == 1)
+    }
+
+    @Test func enteringFullScreenBeforeDeferredDropPreventsPlacement() throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let moving = f.window(f.screen.visibleFrame)
+        f.engine.completeDrag(window: moving.0, zone: .leftHalf, screen: f.screen, forceExactSize: true)
+        moving.1.isFullScreen = true
+        f.clock.deliverAllIncludingCancelled()
+        f.clock.deliverAllIncludingCancelled()
+
+        #expect(moving.1.writes == 0)
+        #expect(f.discovery.snapshotCount == 0)
+        #expect(f.manager.activePairs.isEmpty)
+    }
+
+    @Test func nonResizableWindowRejectsBothFrameAPIsAndSnapping() throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let moving = f.window(f.screen.visibleFrame)
+        moving.1.isResizable = false
+        #expect(!moving.0.setAXFrame(CGRect(x: 0, y: 0, width: 600, height: 500)))
+        #expect(!moving.0.setCocoaFrame(f.screen.visibleFrame, primaryScreenHeight: f.height))
+        f.engine.snapWindow(moving.0, to: .leftHalf, on: f.screen, forceExactSize: true)
+        #expect(moving.1.writes == 0)
+        #expect(f.discovery.snapshotCount == 0)
+    }
+
+    @Test(arguments: [false, true])
+    func fullScreenMemberInvalidatesPairAndPreventsRediscovery(firstIsFullScreen: Bool) throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let first = f.window(SnapZone.leftHalf.targetRect(for: f.screen.visibleFrame))
+        let second = f.window(SnapZone.rightHalf.targetRect(for: f.screen.visibleFrame))
+        f.discovery.windows = [first.0, second.0]
+        let pair = try #require(f.manager.autoDetectAdjacentWindows(on: f.screen).first)
+        let access = firstIsFullScreen ? first.1 : second.1
+        access.isFullScreen = true
+        #expect(!f.manager.isPairValidAndAdjacent(pair))
+        #expect(f.manager.autoDetectAdjacentWindows(on: f.screen).isEmpty)
+        #expect(f.manager.activePairs.isEmpty)
+
+        f.manager.pair(first: first.0, second: second.0, orientation: .horizontal, on: f.screen)
+        #expect(f.manager.activePairs.isEmpty)
+        #expect(first.1.writes == 0 && second.1.writes == 0)
+    }
+
+    @Test func fullScreenPairStopsDividerFromInterceptingClicks() throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let first = f.window(SnapZone.leftHalf.targetRect(for: f.screen.visibleFrame))
+        let second = f.window(SnapZone.rightHalf.targetRect(for: f.screen.visibleFrame))
+        f.discovery.windows = [first.0, second.0]
+        #expect(f.manager.autoDetectAdjacentWindows(on: f.screen).count == 1)
+        let state = f.manager.state(for: f.screen)
+        let view = try #require(state.dividerWindow.contentView)
+        first.1.isFullScreen = true
+
+        #expect(view.hitTest(CGPoint(x: view.bounds.midX, y: view.bounds.midY)) == nil)
+        #expect(state.pair == nil)
+        #expect(!state.dividerWindow.isVisible)
+    }
+
     @Test func exactAndAdaptiveIntentsUseTheSamePolicyForPreviewAndPlacement() throws {
         let savedPreference = UserDefaults.standard.object(forKey: "MacSnap.isDividerEnabled")
         defer {
@@ -214,10 +297,19 @@ private final class SnapFrames: WindowFrameAccess, @unchecked Sendable {
     private let lock = NSLock()
     private var stored: CGRect
     private var rejected = false
+    private var fullScreen = false
+    private var resizable = true
     private var count = 0
     init(_ frame: CGRect) { stored = frame }
     var frame: CGRect? { lock.withLock { stored } }
-    var isResizable: Bool { true }
+    var isResizable: Bool {
+        get { lock.withLock { resizable } }
+        set { lock.withLock { resizable = newValue } }
+    }
+    var isFullScreen: Bool {
+        get { lock.withLock { fullScreen } }
+        set { lock.withLock { fullScreen = newValue } }
+    }
     var writes: Int { lock.withLock { count } }
     var rejectWrites: Bool {
         get { lock.withLock { rejected } }

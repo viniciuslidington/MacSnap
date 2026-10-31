@@ -130,6 +130,7 @@ final class DividerCustomView: NSView {
     }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
+        guard validatePair() else { return nil }
         let screenPoint = window?.convertPoint(toScreen: point) ?? NSEvent.mouseLocation
         if let isOccluded = dividerWindow?.isOccludedAtPoint, isOccluded(screenPoint) {
             return nil
@@ -138,6 +139,10 @@ final class DividerCustomView: NSView {
     }
 
     override func resetCursorRects() {
+        guard validatePair() else {
+            discardCursorRects()
+            return
+        }
         let mouseLocation = NSEvent.mouseLocation
         if let isOccluded = dividerWindow?.isOccludedAtPoint, isOccluded(mouseLocation) {
             self.discardCursorRects()
@@ -147,15 +152,17 @@ final class DividerCustomView: NSView {
         self.addCursorRect(bounds, cursor: cursor)
     }
 
-    override func mouseEntered(with event: NSEvent) {
-        if let validator = dividerWindow?.validatePair {
-            guard validator() else {
-                dividerWindow?.orderOut(nil)
-                dividerWindow?.onInvalidPairDetected?()
-                return
-            }
+    private func validatePair() -> Bool {
+        guard dividerWindow?.validatePair?() != false else {
+            dividerWindow?.orderOut(nil)
+            dividerWindow?.onInvalidPairDetected?()
+            return false
         }
+        return true
+    }
 
+    override func mouseEntered(with event: NSEvent) {
+        guard validatePair() else { return }
         let mouseLocation = NSEvent.mouseLocation
         if let isOccluded = dividerWindow?.isOccludedAtPoint, isOccluded(mouseLocation) {
             self.alphaValue = 0.0
@@ -175,6 +182,7 @@ final class DividerCustomView: NSView {
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
+        guard validatePair() else { return }
         let mouseLocation = NSEvent.mouseLocation
         let isOccluded = dividerWindow?.isOccludedAtPoint?(mouseLocation) ?? false
 

@@ -134,6 +134,7 @@ public final class PairedSplit {
     public func applyCurrentSplit(primaryScreenHeight: CGFloat) -> Bool {
         let (firstRect, secondRect) = calculateFrames()
         guard primaryScreenHeight.isFinite && primaryScreenHeight > 0,
+              firstWindow.isResizable, secondWindow.isResizable,
               validFrame(firstRect), validFrame(secondRect),
               let currentFirst = firstWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight),
               let currentSecond = secondWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight),
