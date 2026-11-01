@@ -1,6 +1,6 @@
 # Teste local da refatoração nativa
 
-A branch prepara a correção de tela cheia na versão **1.0.9 / build 9**; a release pública continua sendo a 1.0.7. Não foi criada tag nem publicada uma nova release. O build de teste fica separado da instalação em `/Applications/MacSnap.app`.
+A branch prepara a recuperação de Acessibilidade na versão **1.0.10 / build 10**, após a release 1.0.9. O build de teste fica separado da instalação em `/Applications/MacSnap.app`.
 
 ## Abrir e voltar à instalação atual
 

@@ -7,6 +7,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
     private var appUninstaller: AppUninstaller?
     private let accessibilityService: AccessibilityServiceProtocol = AccessibilityService.shared
     private let eventMonitor: EventMonitoringProtocol = GlobalEventMonitor.shared
+    private var accessibilityMonitoring: AccessibilityMonitoringController?
     private var activationObserver: NSObjectProtocol?
     private var screenObserver: NSObjectProtocol?
 
@@ -26,17 +27,19 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             onUninstall: uninstaller.isAvailable ? { [weak uninstaller] in uninstaller?.requestUninstall() } : nil
         )
 
-        // Check accessibility permissions on launch
-        let hasPermission = accessibilityService.isAccessibilityGranted(promptIfNeeded: true)
-        if !hasPermission {
-            print("[MacSnap] Accessibility permission pending. Prompt displayed to user.")
-        }
-
-        // Start global window dragging and edge snapping monitor
-        eventMonitor.startMonitoring()
-
-        // Initial auto-detection of adjacent windows on all connected displays
-        PairedResizeManager.shared.autoDetectAdjacentWindows()
+        let accessibilityMonitoring = AccessibilityMonitoringController(
+            accessibility: accessibilityService, monitor: eventMonitor,
+            onPermissionChanged: { granted in
+                if granted {
+                    PairedResizeManager.shared.autoDetectAdjacentWindows()
+                } else {
+                    PairedResizeManager.shared.clearPairing()
+                    print("[MacSnap] Effective Accessibility permission is missing. Renew MacSnap's authorization in System Settings; an older build's entry may still be enabled.")
+                }
+            }
+        )
+        self.accessibilityMonitoring = accessibilityMonitoring
+        accessibilityMonitoring.start()
 
         // Observe application switches to auto-connect adjacent windows and immediately suppress occluded dividers
         if let activationObserver {
@@ -46,9 +49,10 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: NSWorkspace.didActivateApplicationNotification,
             object: nil,
             queue: .main
-        ) { notif in
+        ) { [weak self] notif in
             guard let app = notif.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             Task { @MainActor in
+                self?.accessibilityMonitoring?.refresh()
                 PairedResizeManager.shared.handleApplicationActivated(app)
                 PairedResizeManager.shared.autoDetectAdjacentWindows()
             }
@@ -61,7 +65,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { @MainActor in PairedResizeManager.shared.handleScreenConfigurationChange() }
         }
 
-        print("[MacSnap] Ready to manage windows.")
+        print("[MacSnap] Application started; window monitoring follows effective Accessibility permission.")
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
@@ -73,7 +77,8 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.removeObserver(screenObserver)
             self.screenObserver = nil
         }
-        eventMonitor.stopMonitoring()
+        accessibilityMonitoring?.stop()
+        accessibilityMonitoring = nil
         PairedResizeManager.shared.clearPairing()
         print("[MacSnap] Quitting application.")
     }

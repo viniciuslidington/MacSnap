@@ -4,6 +4,22 @@ This implementation uses Sparkle 2.10.1 with EdDSA-authenticated archives and th
 
 ## Current readiness
 
+Versions 1.0.8 and 1.0.9 have been published through the approved release pipeline. On 2026-11-01, the installed 1.0.9 application passed recursive signature verification, but macOS TCC logs explicitly rejected its Accessibility access because the previously authorized code requirement did not match the new executable. The pipeline's ad-hoc code signature is tied to a build's code hash; the Sparkle EdDSA archive signature verifies download authenticity but does not preserve TCC authorization across builds. See [Apple's explanation of designated requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements).
+
+The maintainer chose to retain free ad-hoc distribution and guide permission renewal when needed. The recovery below is required for affected installations; a successful update/signature check does not establish Accessibility grant continuity. The implementation and rehearsal notes below describe earlier checkpoints, rather than a claim that the current production feed is empty.
+
+## Recovering window management after an update
+
+If the menu icon appears but dragging a window produces no layout bar or preview:
+
+1. In System Settings → Privacy & Security → Accessibility, remove the existing MacSnap entry and add the currently installed `/Applications/MacSnap.app` again. Enable its access. The old entry can remain visually enabled while macOS denies the new executable.
+2. On version 1.0.9 and earlier, quit and reopen MacSnap after renewing the grant. Those versions attempt event-tap registration only once at launch.
+3. Starting with version 1.0.10, effective trust is checked at launch, on app activation and every two seconds. Capture is retried after native registration failure, stopped when permission is revoked and resumed when access returns. Background checks do not prompt repeatedly, reinstall the app or reset TCC records.
+
+This process keeps the existing installation and preferences. It does not grant permissions programmatically or bypass macOS security. Automatically preserving the existing grant would require a signing identity that remains stable across releases; that is not provided by the current ad-hoc pipeline.
+
+## Historical implementation checkpoints
+
 The updater integration and release tooling are implemented locally. The maintainer generated the production key and configured the GitHub Actions variable `MACSNAP_UPDATE_PUBLIC_KEY` and secret `MACSNAP_UPDATE_PRIVATE_KEY`. Their presence and the public value were checked; the private secret is not readable through GitHub and its signing pair still needs verification by the trusted candidate workflow. No updater-enabled release has been approved, and the checked-in feed intentionally contains no updates. Builds without a configured public key keep updating unavailable and do not start Sparkle.
 
 The fullscreen fix candidate is **1.0.9, build 9**, following the first updater candidate 1.0.8. This prepares version metadata for review; it does not create a tag or publish a release.
