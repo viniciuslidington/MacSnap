@@ -80,6 +80,8 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Preserve approved update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: python3 scripts/update-distribution.py hydrate --site site
       - name: Upload static website
         uses: actions/upload-pages-artifact@v4
