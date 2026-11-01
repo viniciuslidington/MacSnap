@@ -1,12 +1,19 @@
 # Changelog
 
-## [1.0.9] - Unreleased
+## [1.0.10] - 2026-11-01
+
+### Fixed
+
+- Window monitoring now waits for effective Accessibility authorization, retries failed event-tap registration and resumes after permission is renewed, without requiring another app restart.
+- Accessibility settings guidance and generated release notes explain how to renew an older build's permission after an ad-hoc signed update without reinstalling MacSnap.
+
+## [1.0.9] - 2026-10-31
 
 ### Fixed
 
 - Full-screen and fixed-size windows no longer activate snap previews or paired resizing. Entering full screen cancels captured gestures and deferred writes, and stale dividers stop intercepting clicks.
 
-## [1.0.8] - Unreleased
+## [1.0.8] - 2026-10-30
 
 ### Added
 
@@ -27,7 +34,7 @@
 
 ### Release notes
 
-- Version 1.0.7 users need one manual installation of the first updater-enabled release. Version 1.0.8 has not been published yet.
+- Version 1.0.7 users need one manual installation of the first updater-enabled release.
 - Intel/macOS 13 execution testing is deferred to future user testing by the maintainer's decision. Universal slices and the declared macOS 13 minimum are verified; runtime compatibility remains unverified.
 - A local full-MacSnap A → B rehearsal passed under a separate test identity. Production-identity Accessibility, clean-profile migration and login behavior still require acceptance checks. Fully unattended updates are not claimed.
 

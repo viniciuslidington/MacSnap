@@ -62,7 +62,16 @@ jobs:
       - name: Generate release notes
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$RELEASE_TAG" --jq .body > "$RUNNER_TEMP/candidate/notes.md"
+        run: |
+          gh api --method POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$RELEASE_TAG" --jq .body > "$RUNNER_TEMP/candidate/notes.md"
+          cat >> "$RUNNER_TEMP/candidate/notes.md" <<'EOF'
+
+          ## Accessibility after updating / Acessibilidade após atualizar
+
+          This free distribution uses ad-hoc app signing. macOS may require renewing Accessibility authorization after an update, even if the old MacSnap entry is still enabled. If window snapping stops, remove that entry in System Settings → Privacy & Security → Accessibility, then add `/Applications/MacSnap.app` again. Restart versions 1.0.9 and earlier after renewing access. Reinstalling the app is not necessary.
+
+          Esta distribuição gratuita usa assinatura ad hoc. Após atualizar, o macOS pode exigir renovar a autorização de Acessibilidade, mesmo que a entrada antiga do MacSnap continue ativada. Se o encaixe parar, remova essa entrada em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade e adicione `/Applications/MacSnap.app` novamente. Nas versões 1.0.9 e anteriores, encerre e abra o app depois de renovar o acesso. Não é necessário reinstalar.
+          EOF
       - name: Sign and verify candidate feed
         env:
           MACSNAP_UPDATE_PRIVATE_KEY: ${{ secrets.MACSNAP_UPDATE_PRIVATE_KEY }}

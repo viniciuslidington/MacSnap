@@ -414,7 +414,14 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
     }
 
     @objc private func openAccessibilityPreferences() {
-        _ = accessibilityService.isAccessibilityGranted(promptIfNeeded: true)
+        if !accessibilityService.isAccessibilityGranted(promptIfNeeded: false) {
+            let alert = NSAlert()
+            alert.messageText = "Allow MacSnap to manage windows"
+            alert.informativeText = "After an update, macOS may keep authorization for an older version, even with MacSnap enabled in Accessibility settings. Remove the old MacSnap entry, then add this installed app again. You do not need to reinstall MacSnap.\n\nMacSnap will resume monitoring automatically once access is granted."
+            alert.addButton(withTitle: "Open Settings")
+            alert.addButton(withTitle: "Later")
+            guard alert.runModal() == .alertFirstButtonReturn else { return }
+        }
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
             NSWorkspace.shared.open(url)
         }
