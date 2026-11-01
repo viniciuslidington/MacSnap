@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
@@ -96,6 +97,12 @@ def merge_feed(candidate, previous):
 
 def fetch(url, *, allow_missing=False):
     request = urllib.request.Request(url, headers={"User-Agent": "MacSnap-release"})
+    parsed = urllib.parse.urlsplit(url)
+    token = os.environ.get("GH_TOKEN", "")
+    if parsed.scheme == "https" and parsed.netloc == "api.github.com" and token:
+        # Workflow runners share anonymous rate limits. Never forward this credential
+        # to download/CDN hosts or to a redirect destination.
+        request.add_unredirected_header("Authorization", "Bearer " + token)
     try:
         with urllib.request.urlopen(request, timeout=45) as response:
             data = response.read(2_000_001)

@@ -27,6 +27,30 @@ def feed(build=8, version="1.0.8", *, signature=None):
 
 
 class UpdatePublicationTests(unittest.TestCase):
+    def test_github_api_uses_workflow_token_without_forwarding_it_to_other_hosts(self):
+        for url, authenticated in [
+            ("https://api.github.com/repos/example/app/releases", True),
+            ("http://api.github.com/repos/example/app/releases", False),
+            ("https://api.github.com.example.invalid/releases", False),
+            ("https://github.com/example/app/releases/download/v1/appcast.xml", False),
+        ]:
+            with self.subTest(url=url), patch.dict(updates.os.environ, {"GH_TOKEN": "test-token"}, clear=True), \
+                    patch.object(updates.urllib.request, "urlopen") as opened:
+                opened.return_value.__enter__.return_value.read.return_value = b"[]"
+                self.assertEqual(updates.fetch(url), b"[]")
+                request = opened.call_args.args[0]
+                self.assertEqual(request.get_header("Authorization"), "Bearer test-token" if authenticated else None)
+                redirected = updates.urllib.request.HTTPRedirectHandler().redirect_request(
+                    request, None, 302, "Found", {}, "https://cdn.example.invalid/feed.xml")
+                self.assertIsNone(redirected.get_header("Authorization"))
+
+    def test_public_api_reads_still_work_without_a_workflow_token(self):
+        with patch.dict(updates.os.environ, {}, clear=True), \
+                patch.object(updates.urllib.request, "urlopen") as opened:
+            opened.return_value.__enter__.return_value.read.return_value = b"[]"
+            updates.fetch("https://api.github.com/repos/example/app/releases")
+            self.assertIsNone(opened.call_args.args[0].get_header("Authorization"))
+
     def test_new_release_preserves_the_previous_offers(self):
         merged = updates.merge_feed(feed(9, "1.0.9"), feed())
         self.assertEqual(list(updates.entries(merged)), [9, 8])
