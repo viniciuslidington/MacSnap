@@ -93,7 +93,7 @@
       </div>
       <a
         class="button button-small header-download" aria-label="{{copy.download_for_macos}}"
-        href="{{download_url}}"
+        href="#instalar" data-install-link
         ><span class="header-download-label">{{copy.download}}</span> <span class="desktop-label">{{copy.for_macos}}</span><svg aria-hidden="true" viewBox="0 0 20 20">
           <path d="M10 3v10m-4-4 4 4 4-4M4 14v3h12v-3" /></svg></a>
     </header>
@@ -110,7 +110,7 @@
           <div class="hero-actions">
             <a
               class="button"
-              href="{{download_url}}"
+              href="#instalar" data-install-link
               >{{copy.download_for_macos}}<svg aria-hidden="true" viewBox="0 0 20 20">
                 <path d="M10 3v10m-4-4 4 4 4-4M4 14v3h12v-3" /></svg></a><a class="text-link" href="#como-funciona"
               >{{copy.meet_macsnap}} <span aria-hidden="true">↓</span></a>
@@ -462,10 +462,12 @@
             </div>
             <a
               class="button"
-              href="{{download_url}}"
-              >{{copy.download_for_macos}}<svg aria-hidden="true" viewBox="0 0 20 20">
+              href="{{download_url}}" data-release-download
+              >{{installer.download_label}}<svg aria-hidden="true" viewBox="0 0 20 20">
                 <path d="M10 3v10m-4-4 4 4 4-4M4 14v3h12v-3" /></svg></a>
           </div>
+          <p class="install-intro">{{copy.install_intro}}</p>
+          <p class="install-route-label">{{copy.install_route_label}}</p>
           <ol class="install-steps">
             <li>
               <span class="step-number">01</span>
@@ -483,25 +485,44 @@
             </li>
             <li>
               <span class="step-number">03</span>
+              <h3>{{copy.open_anyway_title}}</h3>
+              <p>{{copy.open_anyway_body}}</p>
+            </li>
+            <li>
+              <span class="step-number">04</span>
               <h3>{{copy.allow_accessibility_access}}</h3>
               <p>
                 {{copy.in_system_settings_privacy_security_accessibility_allow_}}
               </p>
             </li>
           </ol>
+          <aside class="native-tiling-note" aria-labelledby="native-tiling-title">
+            <h3 id="native-tiling-title">{{copy.native_tiling_title}}</h3>
+            <p>{{copy.native_tiling_intro}}</p>
+            <ul>
+              <li>{{copy.native_tiling_edges}}</li>
+              <li>{{copy.native_tiling_menubar}}</li>
+              <li>{{copy.native_tiling_option}}</li>
+            </ul>
+            <figure class="native-tiling-example">
+              <img src="{{asset_prefix}}assets/macos-window-tiling-settings.png" width="472" height="158"
+                   loading="lazy" alt="{{copy.native_tiling_image_alt}}" />
+              <figcaption>{{copy.native_tiling_image_caption}}</figcaption>
+            </figure>
+            <p>{{copy.native_tiling_footer}} <a href="{{copy.native_tiling_url}}">{{copy.native_tiling_link}}</a></p>
+          </aside>
           <aside class="installation-note" aria-labelledby="install-note-title">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
-            <div>
+            <figure class="gatekeeper-example">
+              <img src="{{asset_prefix}}assets/macos-open-warning.png" width="300" height="313"
+                   loading="lazy" alt="{{copy.warning_alt}}" />
+              <figcaption>{{copy.warning_caption}}</figcaption>
+            </figure>
+            <div class="installation-explanation">
               <h3 id="install-note-title">{{copy.independently_distributed}}</h3>
-              <p>
-                {{copy.the_current_release_is_ad_hoc_signed_and_isn_t_notarized}}
-                <a href="{{apple_support}}"
-                  >{{copy.apple_s_official_guidance}}</a>
-                {{copy.and_only_open_apps_from_sources_you_trust}}
-              </p>
+              <p>{{copy.the_current_release_is_ad_hoc_signed_and_isn_t_notarized}}</p>
+              <p>{{copy.notarization_cost}} <a href="https://developer.apple.com/programs/enroll/">{{copy.apple_program_link}}</a>.</p>
+              <p>{{copy.trust_explanation}} <a href="https://github.com/viniciuslidington/MacSnap">{{copy.review_source}}</a> ·
+                <a href="{{apple_support}}">{{copy.apple_s_official_guidance}}</a></p>
             </div>
           </aside>
           <p class="release-fallback">
@@ -510,7 +531,7 @@
               href="https://github.com/viniciuslidington/MacSnap/releases/latest"
               >{{copy.visit_the_release_page}} <span aria-hidden="true">↗</span></a>
           </p>
-          <details class="terminal-install">
+          <details class="terminal-install" id="terminal-install">
             <summary>
               <span class="terminal-icon" aria-hidden="true">›_</span>
               <span
@@ -524,6 +545,7 @@
                 href="https://github.com/viniciuslidington/MacSnap/blob/main/install.sh"
                 >{{copy.read_the_script_before_running_it}}</a>.
             </p>
+            <p>{{copy.terminal_permissions}}</p>
             <div class="code-box">
               <!-- prettier-ignore -->
               <code id="install-command">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/viniciuslidington/MacSnap/main/install.sh)"</code>
@@ -532,6 +554,7 @@
               </button>
             </div>
             <p class="copy-status" role="status" aria-live="polite"></p>
+            <p>{{copy.after_install}}</p>
           </details>
         </div>
       </section>
@@ -640,7 +663,7 @@
         </h2>
         <a
           class="button"
-          href="{{download_url}}"
+          href="#instalar" data-install-link
           >{{copy.try_macsnap}} <span aria-hidden="true">↗</span></a>
         <p>{{copy.for_your_mac_open_source}}</p>
       </section>

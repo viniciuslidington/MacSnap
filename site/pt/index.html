@@ -94,7 +94,7 @@
       </div>
       <a
         class="button button-small header-download" aria-label="Baixar para macOS"
-        href="https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip"
+        href="#instalar" data-install-link
         ><span class="header-download-label">Baixar</span> <span class="desktop-label">para macOS</span><svg aria-hidden="true" viewBox="0 0 20 20">
           <path d="M10 3v10m-4-4 4 4 4-4M4 14v3h12v-3" /></svg></a>
     </header>
@@ -111,7 +111,7 @@
           <div class="hero-actions">
             <a
               class="button"
-              href="https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip"
+              href="#instalar" data-install-link
               >Baixar para macOS<svg aria-hidden="true" viewBox="0 0 20 20">
                 <path d="M10 3v10m-4-4 4 4 4-4M4 14v3h12v-3" /></svg></a><a class="text-link" href="#como-funciona"
               >Conheça o app <span aria-hidden="true">↓</span></a>
@@ -458,15 +458,17 @@
             <div>
               <p class="eyebrow">PRONTO PARA EXPERIMENTAR?</p>
               <h2 id="install-title">
-                Um pequeno app.<br /><em>Um novo espaço.</em>
+                Instale o MacSnap.<br /><em>Saiba o que esperar.</em>
               </h2>
             </div>
             <a
               class="button"
-              href="https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip"
-              >Baixar para macOS<svg aria-hidden="true" viewBox="0 0 20 20">
+              href="https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip" data-release-download
+              >Baixar ZIP<svg aria-hidden="true" viewBox="0 0 20 20">
                 <path d="M10 3v10m-4-4 4 4 4-4M4 14v3h12v-3" /></svg></a>
           </div>
+          <p class="install-intro">Escolha o download ou o Terminal. Os dois caminhos instalam o mesmo app e precisam da sua permissão para organizar janelas.</p>
+          <p class="install-route-label">01 / DOWNLOAD — RECOMENDADO</p>
           <ol class="install-steps">
             <li>
               <span class="step-number">01</span>
@@ -484,25 +486,44 @@
             </li>
             <li>
               <span class="step-number">03</span>
+              <h3>Confira o aviso do macOS.</h3>
+              <p>Se o macOS disser que não pode verificar o MacSnap, clique em Concluído (Done). Em Ajustes do Sistema → Privacidade e Segurança, role até Segurança, escolha Abrir Mesmo Assim para o MacSnap e confirme em Abrir. Faça isso apenas se confiar na origem do download.</p>
+            </li>
+            <li>
+              <span class="step-number">04</span>
               <h3>Permita Acessibilidade.</h3>
               <p>
-                Em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade, autorize o MacSnap a organizar as janelas.
+                Em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade, ative o MacSnap para mover e redimensionar janelas. Essa permissão é separada e necessária nos dois métodos de instalação.
               </p>
             </li>
           </ol>
+          <aside class="native-tiling-note" aria-labelledby="native-tiling-title">
+            <h3 id="native-tiling-title">Deixe o encaixe de janelas com o MacSnap.</h3>
+            <p>No macOS Sequoia 15 ou posterior, desative os gestos nativos de mosaico antes de usar o MacSnap. Abra Ajustes do Sistema → Mesa e Dock → Janelas e desative:</p>
+            <ul>
+              <li>Arrastar janelas para a borda esquerda ou direita da tela para organizá-las em mosaico.</li>
+              <li>Arrastar janelas para a barra de menus para preencher a tela.</li>
+              <li>Manter a tecla Option pressionada ao arrastar janelas para organizá-las em mosaico.</li>
+            </ul>
+            <figure class="native-tiling-example">
+              <img src="../assets/macos-window-tiling-settings.png" width="472" height="158"
+                   loading="lazy" alt="Ajustes de mosaico de janelas do macOS em inglês, com as opções de bordas, barra de menus, arraste com Option e margens desativadas." />
+              <figcaption>Referência visual: desative as três primeiras opções descritas acima. Os nomes podem variar conforme a versão do macOS.</figcaption>
+            </figure>
+            <p>Assim, o macOS e o MacSnap não respondem ao mesmo arraste. Os nomes variam conforme a versão do macOS; se esses ajustes não existirem em uma versão anterior, pule esta etapa. Faça essa configuração nos dois métodos de instalação. <a href="https://support.apple.com/pt-br/guide/mac-help/mchl118087b0/mac">Guia de mosaico de janelas da Apple</a></p>
+          </aside>
           <aside class="installation-note" aria-labelledby="install-note-title">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6l-8-3Z" />
-              <path d="m9 12 2 2 4-4" />
-            </svg>
-            <div>
-              <h3 id="install-note-title">Uma distribuição independente.</h3>
-              <p>
-                A versão atual tem assinatura ad-hoc e não é notarizada pela Apple. O macOS pode apresentar um aviso ao abrir. Confira a
-                <a href="https://support.apple.com/pt-br/102445"
-                  >orientação oficial da Apple</a>
-                e abra somente aplicativos de fontes em que você confia.
-              </p>
+            <figure class="gatekeeper-example">
+              <img src="../assets/macos-open-warning.png" width="300" height="313"
+                   loading="lazy" alt="Aviso do macOS: a Apple não pôde verificar se MacSnap.app está livre de malware. Botões: Mover para o Lixo e Concluído." />
+              <figcaption>Exemplo do aviso na primeira abertura. O texto varia conforme a versão do macOS.</figcaption>
+            </figure>
+            <div class="installation-explanation">
+              <h3 id="install-note-title">Por que o macOS mostra esse aviso?</h3>
+              <p>O MacSnap usa assinatura ad hoc, sem certificado Developer ID ou notarização da Apple. Esse aviso significa que a Apple não conseguiu verificar o app; ele não indica, por si só, que um malware foi detectado.</p>
+              <p>A assinatura padrão do Apple Developer Program custa US$ 99 por ano, com preços regionais. Este projeto independente mantém, por enquanto, a distribuição sem essa assinatura. O MacSnap continua gratuito e open source. <a href="https://developer.apple.com/programs/enroll/">Veja os detalhes do programa da Apple</a>.</p>
+              <p>Open source significa que você pode consultar o código, não que ele foi revisado pela Apple ou que tem segurança garantida. Confira a origem da release antes de autorizar o app. <a href="https://github.com/viniciuslidington/MacSnap">Consultar o código-fonte</a> ·
+                <a href="https://support.apple.com/pt-br/102445">orientação oficial da Apple</a></p>
             </div>
           </aside>
           <p class="release-fallback">
@@ -511,20 +532,21 @@
               href="https://github.com/viniciuslidington/MacSnap/releases/latest"
               >Abra a página da release <span aria-hidden="true">↗</span></a>
           </p>
-          <details class="terminal-install">
+          <details class="terminal-install" id="terminal-install">
             <summary>
               <span class="terminal-icon" aria-hidden="true">›_</span>
               <span
-                ><strong>Prefere instalar pelo Terminal?</strong><span class="terminal-subtitle"
-                  >Veja o comando de instalação.</span></span>
+                ><strong>02 / Terminal — para usuários experientes</strong><span class="terminal-subtitle"
+                  >Confira o script e copie o comando.</span></span>
               <span class="terminal-chevron" aria-hidden="true">+</span>
             </summary>
             <p>
-              O instalador baixa o app, configura o início de sessão e abre os ajustes de Acessibilidade. Você pode
+              Este comando baixa e executa nosso instalador. Ele instala a release mais recente em Aplicativos, configura a abertura no login e abre os ajustes de Acessibilidade. Se não conseguir baixar uma release, tenta compilar o código-fonte. Antes de executar,
               <a
                 href="https://github.com/viniciuslidington/MacSnap/blob/main/install.sh"
-                >ler o script antes de executar</a>.
+                >leia o script antes de executar</a>.
             </p>
+            <p>Downloads pelo curl podem não receber a mesma marca de quarentena dos downloads pelo navegador, então o aviso de primeira abertura pode ser diferente. Isso não é notarização nem garantia de instalação sem avisos. A permissão de Acessibilidade continua necessária; o instalador não desativa o Gatekeeper nem remove atributos de quarentena.</p>
             <div class="code-box">
               <!-- prettier-ignore -->
               <code id="install-command">/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/viniciuslidington/MacSnap/main/install.sh)"</code>
@@ -533,6 +555,7 @@
               </button>
             </div>
             <p class="copy-status" role="status" aria-live="polite"></p>
+            <p>Após instalar, procure o MacSnap na barra de menus. Se o encaixe parar depois de atualizar, remova a entrada antiga em Acessibilidade e adicione /Applications/MacSnap.app novamente.</p>
           </details>
         </div>
       </section>
@@ -641,7 +664,7 @@
         </h2>
         <a
           class="button"
-          href="https://github.com/viniciuslidington/MacSnap/releases/latest/download/MacSnap.app.zip"
+          href="#instalar" data-install-link
           >Experimente o MacSnap <span aria-hidden="true">↗</span></a>
         <p>Para o seu Mac. De código aberto.</p>
       </section>

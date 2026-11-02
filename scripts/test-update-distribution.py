@@ -17,16 +17,75 @@ updates = importlib.util.module_from_spec(module)
 module.loader.exec_module(updates)
 
 
-def feed(build=8, version="1.0.8", *, signature=None):
+def feed(build=8, version="1.0.8", *, signature=None, tag=None):
     signature = signature or base64.b64encode(bytes(64)).decode()
     return f'''<rss xmlns:sparkle="{updates.NS}"><channel><title>MacSnap</title><item>
     <sparkle:version>{build}</sparkle:version><sparkle:shortVersionString>{version}</sparkle:shortVersionString>
     <sparkle:minimumSystemVersion>13.0.0</sparkle:minimumSystemVersion>
-    <enclosure url="https://github.com/{updates.REPO}/releases/download/v{version}/MacSnap.app.zip"
+    <enclosure url="https://github.com/{updates.REPO}/releases/download/{tag or "v" + version}/MacSnap.app.zip"
     length="1234" sparkle:edSignature="{signature}"/></item></channel></rss>'''.encode()
 
 
 class UpdatePublicationTests(unittest.TestCase):
+    def test_revision_tags_bind_display_version_and_build(self):
+        info = {"CFBundleShortVersionString": "1.0.11", "CFBundleVersion": "12"}
+        updates.validate_release_tag("v1.0.11-build.12", info)
+        updates.validate_release_tag("v1.0.11", info)
+        for tag in ["v1.0.11-build.11", "v1.0.12-build.12", "v1.0.11-build.0",
+                    "v1.0.11-build.012", "v1.0.11/latest", "v1.0.11-rc1"]:
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                updates.validate_release_tag(tag, info)
+
+    def test_revision_preserves_original_same_version_offer(self):
+        old = feed(11, "1.0.11")
+        new = feed(12, "1.0.11", tag="v1.0.11-build.12")
+        combined = updates.entries(updates.merge_feed(new, old))
+        self.assertEqual(list(combined), [12, 11])
+        self.assertEqual(combined[11][1].attrib, updates.entries(old)[11][1].attrib)
+        for tag in ["v1.0.11-build.11", "v1.0.12-build.12", "v1.0.11-build.012"]:
+            with self.subTest(tag=tag), self.assertRaises(ValueError):
+                updates.entries(feed(12, "1.0.11", tag=tag))
+
+    def test_revision_feed_hydrates_without_replacing_original_download(self):
+        old = feed(11, "1.0.11")
+        new = updates.merge_feed(feed(12, "1.0.11", tag="v1.0.11-build.12"), old)
+        tag = "v1.0.11-build.12"
+        url = f"https://github.com/{updates.REPO}/releases/download/{tag}/"
+        release = json.dumps([{"tag_name": tag, "assets": [
+            {"name": name, "browser_download_url": url + name}
+            for name in ["appcast.xml", "update-approval.json"]]}]).encode()
+        receipt = json.dumps({"tag": tag, "archive_sha256": "a" * 64,
+                              "appcast_sha256": hashlib.sha256(new).hexdigest()}).encode()
+        with tempfile.TemporaryDirectory() as folder:
+            site = Path(folder)
+            (site / "updates").mkdir()
+            target = site / "updates/appcast.xml"
+            target.write_bytes(old)
+            with patch.object(updates, "fetch", side_effect=[old, release, new, receipt]):
+                updates.hydrate(type("Args", (), {"site": site}))
+            self.assertEqual(list(updates.entries(target.read_bytes())), [12, 11])
+
+    def test_revision_archive_requires_the_exact_tag_url_and_build(self):
+        public = base64.b64encode(bytes(32)).decode()
+        info = {"CFBundleIdentifier": updates.APP_ID, "CFBundleVersion": "12",
+                "CFBundleShortVersionString": "1.0.11", "SUPublicEDKey": public,
+                "LSMinimumSystemVersion": "13.0", "SUFeedURL": updates.FEED,
+                "SUVerifyUpdateBeforeExtraction": True}
+        with tempfile.TemporaryDirectory() as folder:
+            archive = Path(folder) / "MacSnap.app.zip"
+            with zipfile.ZipFile(archive, "w") as zipped:
+                zipped.writestr("MacSnap.app/Contents/Info.plist", plistlib.dumps(info))
+            root = updates.read_xml(feed(12, "1.0.11", tag="v1.0.11-build.12"))
+            root.find("channel/item/enclosure").set("length", str(archive.stat().st_size))
+            candidate = updates.ET.tostring(root)
+            with patch.object(updates.subprocess, "run") as verifier:
+                updates.verify(archive, candidate, public, "v1.0.11-build.12")
+                verifier.assert_called_once()
+                for tag in ["v1.0.11", "v1.0.11-build.13"]:
+                    with self.subTest(tag=tag), self.assertRaises(ValueError):
+                        updates.verify(archive, candidate, public, tag)
+                self.assertEqual(verifier.call_count, 1)
+
     def test_github_api_uses_workflow_token_without_forwarding_it_to_other_hosts(self):
         for url, authenticated in [
             ("https://api.github.com/repos/example/app/releases", True),

@@ -1,6 +1,17 @@
 # Changelog
 
-## [1.0.11] - 2026-11-02
+## [1.0.11 — build 12] - 2026-11-02
+
+### Added
+
+- Optional “Hold ⌥ to Snap Earlier” menu switch, off by default and saved between launches. Option expands edge/corner detection while held; ordinary dragging remains available without it. Modifier changes and release revalidate the preview target.
+
+### Changed
+
+- Bilingual website installation guidance now covers the DMG, Gatekeeper, Accessibility, native tiling settings and advanced Terminal installation.
+- Release tooling supports immutable build revision tags while retaining the visible app version.
+
+## [1.0.11 — build 11] - 2026-11-02
 
 ### Fixed
 

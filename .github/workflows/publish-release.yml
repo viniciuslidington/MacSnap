@@ -43,8 +43,8 @@ jobs:
       - name: Validate approval and candidate availability
         run: |
           python3 - <<'PY'
-          import os, re
-          assert re.fullmatch(r'v\d+\.\d+\.\d+', os.environ['RELEASE_TAG']), 'Invalid tag'
+          import os, re, runpy
+          runpy.run_path('scripts/update-distribution.py')['release_tag_identity'](os.environ['RELEASE_TAG'])
           assert re.fullmatch(r'[a-fA-F0-9]{64}', os.environ['APPROVED_SHA256']), 'Invalid digest'
           assert re.fullmatch(r'[a-fA-F0-9]{64}', os.environ['APPROVED_DMG_SHA256']), 'Invalid installer digest'
           PY

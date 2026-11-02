@@ -18,7 +18,7 @@ UI_KEYS = {"copySuccess", "copyFailure", "copied", "showLayouts", "hideLayouts",
 
 def render_all(release_tag=None):
     if release_tag is not None:
-        assert re.fullmatch(r"v\d+\.\d+\.\d+", release_tag), "Invalid download release tag"
+        assert re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-build\.[1-9][0-9]*)?", release_tag), "Invalid download release tag"
     template = (SOURCE / "template.html").read_text(encoding="utf-8")
     locales = {
         lang: json.loads((SOURCE / "locales" / f"{lang}.json").read_text(encoding="utf-8"))
