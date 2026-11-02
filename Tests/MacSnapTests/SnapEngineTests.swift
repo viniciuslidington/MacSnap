@@ -7,6 +7,92 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct SnapEngineTests {
+    @Test(arguments: [SnapZone.leftHalf, .rightHalf, .topLeftQuarter, .bottomRightQuarter, .maximize, .centerThird])
+    func constrainedPreviewMatchesPlacementAndStaysInsideScreen(zone: SnapZone) throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let b = f.screen.visibleFrame
+        let moving = f.window(b)
+        let fixed = CGSize(width: b.width * 0.6, height: b.height * 0.4)
+        moving.1.sizeLimits = .init(minimum: fixed, maximum: fixed)
+        let preview = try #require(f.engine.previewRect(for: moving.0, to: zone, on: f.screen, forceExactSize: true))
+        #expect(preview.size == fixed)
+        #expect(b.contains(preview))
+        if zone == .rightHalf || zone == .bottomRightQuarter { #expect(preview.maxX == b.maxX) }
+        if zone == .leftHalf || zone == .topLeftQuarter { #expect(preview.minX == b.minX) }
+        if zone == .topLeftQuarter { #expect(preview.maxY == b.maxY) }
+        if zone == .bottomRightQuarter { #expect(preview.minY == b.minY) }
+        f.engine.snapWindow(moving.0, to: zone, on: f.screen, forceExactSize: true)
+        #expect(moving.0.cocoaFrame(primaryScreenHeight: f.height) == preview)
+    }
+
+    @Test func unknownLimitsPreserveDefaultPreviewAndDrop() throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let moving = f.window(f.screen.visibleFrame)
+        moving.1.sizeLimits = .init()
+        #expect(f.engine.previewRect(for: moving.0, to: .leftHalf, on: f.screen, forceExactSize: true) == SnapZone.leftHalf.targetRect(for: f.screen.visibleFrame))
+        #expect(moving.1.writes == 0) // Preview never probes by resizing a real window.
+        f.engine.snapWindow(moving.0, to: .leftHalf, on: f.screen, forceExactSize: true)
+        #expect(moving.1.writes == 1)
+    }
+
+    @Test func partialBoundsAdjustBothPreviewAndPlacement() throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let b = f.screen.visibleFrame
+        let moving = f.window(b)
+        moving.1.sizeLimits = .init(minimum: CGSize(width: b.width * 0.7, height: 1))
+        let preview = try #require(f.engine.previewRect(for: moving.0, to: .rightHalf, on: f.screen, forceExactSize: true))
+        f.engine.snapWindow(moving.0, to: .rightHalf, on: f.screen, forceExactSize: true)
+        let placed = try #require(moving.0.cocoaFrame(primaryScreenHeight: f.height))
+        #expect(placed == preview)
+        #expect(abs(placed.width - b.width * 0.7) < 0.001)
+        #expect(abs(placed.maxX - b.maxX) < 0.001)
+    }
+
+    @Test func dropRefreshesLimitsAfterPreviewWithoutResizingDuringPreview() throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let b = f.screen.visibleFrame
+        let moving = f.window(b)
+        let before = f.engine.previewRect(for: moving.0, to: .rightHalf, on: f.screen, forceExactSize: true)
+        #expect(moving.1.writes == 0)
+        f.engine.completeDrag(window: moving.0, zone: .rightHalf, screen: f.screen, forceExactSize: true)
+        let updated = CGSize(width: b.width * 0.6, height: b.height * 0.5)
+        moving.1.sizeLimits = .init(minimum: updated, maximum: updated)
+        f.clock.deliverAllIncludingCancelled()
+        let placed = try #require(moving.0.cocoaFrame(primaryScreenHeight: f.height))
+        #expect(placed != before)
+        #expect(placed.size == updated)
+        #expect(placed.maxX == b.maxX)
+    }
+
+    @Test func impossibleBoundsSuppressPreviewAndPlacement() throws {
+        let f = try Fixture()
+        defer { f.cleanup() }
+        let b = f.screen.visibleFrame
+        let moving = f.window(b)
+        moving.1.sizeLimits = .init(minimum: CGSize(width: b.width + 10, height: 10),
+                                  maximum: CGSize(width: b.width + 100, height: b.height))
+        #expect(f.engine.previewRect(for: moving.0, to: .maximize, on: f.screen, forceExactSize: true) == nil)
+        f.engine.snapWindow(moving.0, to: .maximize, on: f.screen, forceExactSize: true)
+        #expect(moving.1.writes == 0)
+    }
+
+    @Test func invalidBoundsCannotProduceAPreviewOrTarget() {
+        let b = CGRect(x: -1200, y: 100, width: 1200, height: 800)
+        let invalid: [WindowSizeLimits] = [
+            .init(minimum: CGSize(width: -1, height: 10)),
+            .init(maximum: .zero),
+            .init(maximum: CGSize(width: CGFloat.nan, height: 100)),
+            .init(minimum: CGSize(width: 500, height: 100), maximum: CGSize(width: 400, height: 200))
+        ]
+        for limits in invalid {
+            #expect(limits.fitting(b, within: b) == nil)
+        }
+    }
+
     @Test func fullScreenWindowRejectsSnappingEvenWhenAXSizeIsSettable() throws {
         let f = try Fixture()
         defer { f.cleanup() }
@@ -113,7 +199,7 @@ struct SnapEngineTests {
         #expect(moving.0.cocoaFrame(primaryScreenHeight: f.height) == exact)
         #expect(f.manager.state(for: f.screen).pair == nil)
 
-        let adaptive = f.engine.previewRect(for: moving.0, to: .rightHalf, on: f.screen, forceExactSize: false)
+        let adaptive = try #require(f.engine.previewRect(for: moving.0, to: .rightHalf, on: f.screen, forceExactSize: false))
         #expect(abs(adaptive.minX - (bounds.minX + bounds.width * 0.65)) < 0.001)
         f.engine.snapWindow(moving.0, to: .rightHalf, on: f.screen)
         #expect(moving.0.cocoaFrame(primaryScreenHeight: f.height) == adaptive)
@@ -239,7 +325,7 @@ struct SnapEngineTests {
             let moving = f.window(b)
             let stationary = neighbors.map { f.window($0) }
             f.discovery.windows = stationary.map(\.0)
-            let preview = f.engine.previewRect(for: moving.0, to: zone, on: f.screen, forceExactSize: false)
+            let preview = try #require(f.engine.previewRect(for: moving.0, to: zone, on: f.screen, forceExactSize: false))
             f.engine.snapWindow(moving.0, to: zone, on: f.screen)
             let placed = try #require(moving.0.cocoaFrame(primaryScreenHeight: f.height))
             for result in [preview, placed] {
@@ -299,6 +385,11 @@ private final class SnapFrames: WindowFrameAccess, @unchecked Sendable {
     private var rejected = false
     private var fullScreen = false
     private var resizable = true
+    private var limits = WindowSizeLimits(minimum: .zero, maximum: CGSize(width: 100000, height: 100000))
+    var sizeLimits: WindowSizeLimits {
+        get { lock.withLock { limits } }
+        set { lock.withLock { limits = newValue } }
+    }
     private var count = 0
     init(_ frame: CGRect) { stored = frame }
     var frame: CGRect? { lock.withLock { stored } }

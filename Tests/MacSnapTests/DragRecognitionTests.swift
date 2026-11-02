@@ -196,6 +196,105 @@ struct DragRecognitionTests {
 @MainActor
 @Suite(.serialized)
 struct GlobalEventMonitorIntegrationTests {
+    @Test(arguments: [0, 1, 2, 3, 4])
+    func resizeBorderIsRejectedEvenWithoutSizeChange(edge: Int) throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        let frame = try #require(f.window.cocoaFrame(primaryScreenHeight: f.screen.frame.height))
+        let points = [
+            CGPoint(x: frame.midX, y: frame.maxY - 1),
+            CGPoint(x: frame.minX + 1, y: frame.maxY - 1),
+            CGPoint(x: frame.maxX - 1, y: frame.maxY - 1),
+            CGPoint(x: frame.minX + 1, y: frame.maxY - 20),
+            CGPoint(x: frame.maxX - 1, y: frame.maxY - 20),
+        ]
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: points[edge])
+        // A minimum-size constraint can keep the frame unchanged during a resize.
+        f.monitor.handleEvent(type: .leftMouseDragged,
+                              atCocoaPoint: CGPoint(x: frame.midX, y: frame.maxY - 20))
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.drops.isEmpty)
+        #expect(f.engine.previews.isEmpty)
+    }
+
+    @Test func sizeChangeDuringDragDismissesControlsAndStaysIgnoredUntilRelease() throws {
+        let existing = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        let bar = try #require(NSApplication.shared.windows
+            .filter { !existing.contains(ObjectIdentifier($0)) }
+            .compactMap { $0 as? SnapLayoutBarWindow }.first)
+        f.monitor.isTopSnapBarEnabled = true
+        let original = try #require(f.frames.frame)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start.offsetBy(dx: 14))
+        #expect(bar.presentationState == .pill)
+        f.frames.frame = CGRect(origin: original.origin,
+                               size: CGSize(width: original.width + 40, height: original.height))
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        #expect(bar.presentationState == .hidden)
+        f.frames.frame = original
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.previews.isEmpty)
+        #expect(f.engine.drops.isEmpty)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.drops.count == 1)
+    }
+
+    @Test func sizeChangeImmediatelyBeforeReleaseCannotCommitSnap() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        #expect(f.engine.previews.last == f.edgeZone)
+        let original = try #require(f.frames.frame)
+        f.frames.frame = CGRect(origin: original.origin,
+                               size: CGSize(width: original.width, height: original.height + 40))
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.drops.isEmpty)
+    }
+
+    @Test func translatingWindowAndBoundedRoundingStillAllowSnapping() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        let original = try #require(f.frames.frame)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.frames.frame = CGRect(x: original.minX + 40, y: original.minY,
+                               width: original.width + 2, height: original.height + 2)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start.offsetBy(dx: 40))
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.access.hitTests == 1)
+        #expect(f.engine.drops.count == 1)
+        #expect(f.engine.drops.first?.window === f.window)
+        #expect(f.engine.drops.first?.zone == f.edgeZone)
+    }
+
+    @Test func unavailablePreviewClearsOldShadowAndPreservesDropSelection() async throws {
+        _ = NSApplication.shared
+        let existing = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let f = try MonitorFixture()
+        let preview = try #require(NSApplication.shared.windows
+            .filter { !existing.contains(ObjectIdentifier($0)) }
+            .compactMap { $0 as? PreviewOverlayWindow }.first)
+        defer { f.cleanUp(); preview.orderOut(nil) }
+        await withCompletedAppKitAnimations {
+            f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+            f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        }
+        #expect(preview.isVisible)
+        f.engine.suppressPreview = true
+        await withCompletedAppKitAnimations {
+            f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        }
+        #expect(!preview.isVisible)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.drops.last?.zone == f.edgeZone)
+    }
+
     @Test func quarterToMaximizeAcrossLayoutGapKeepsPreviewAndDropInSync() async throws {
         _ = NSApplication.shared
         let existingWindows = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
@@ -488,11 +587,15 @@ private extension CGPoint {
 }
 
 private final class MonitorTestFrameAccess: WindowFrameAccess, @unchecked Sendable {
-    let frame: CGRect?
+    private var storedFrame: CGRect?
     private let lock = NSLock()
     private var fullScreen = false
     private var resizable = true
-    init(frame: CGRect) { self.frame = frame }
+    init(frame: CGRect) { self.storedFrame = frame }
+    var frame: CGRect? {
+        get { lock.withLock { storedFrame } }
+        set { lock.withLock { storedFrame = newValue } }
+    }
     var isFullScreen: Bool {
         get { lock.withLock { fullScreen } }
         set { lock.withLock { fullScreen = newValue } }
@@ -552,17 +655,46 @@ private final class MonitorTestSnapEngine: WindowSnappingProtocol {
         let zone: SnapZone?
         let exact: Bool
     }
+    var suppressPreview = false
     var previews: [SnapZone] = []
     var drops: [Drop] = []
     var cancellations = 0
     func snapFocusedWindow(to zone: SnapZone) {}
     func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool) {}
-    func previewRect(for window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool) -> CGRect {
+    func previewRect(for window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool) -> CGRect? {
         previews.append(zone)
+        if suppressPreview { return nil }
         return zone.targetRect(for: screen.visibleFrame)
     }
     func completeDrag(window: WindowElement?, zone: SnapZone?, screen: NSScreen?, forceExactSize: Bool) {
         drops.append(Drop(window: window, zone: zone, exact: forceExactSize))
     }
     func cancelPendingOperations() { cancellations += 1 }
+}
+
+
+extension GlobalEventMonitorIntegrationTests {
+    @Test func auditUC09NativeCornerResizeMustNotOpenSnapBar() throws {
+        let existing = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        let bar = try #require(NSApplication.shared.windows
+            .filter { !existing.contains(ObjectIdentifier($0)) }
+            .compactMap { $0 as? SnapLayoutBarWindow }.first)
+        f.monitor.isTopSnapBarEnabled = true
+        let height = f.screen.frame.height
+        let initial = try #require(f.window.cocoaFrame(primaryScreenHeight: height))
+        let start = CGPoint(x: initial.maxX - 1, y: initial.maxY - 1)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: start)
+        // Resizing the upper-right corner changes size while the lower-left stays fixed.
+        // This is scripted input, not a claim about event delivery in every native app.
+        let resized = CGRect(x: initial.minX, y: initial.minY,
+                             width: initial.width + 40, height: initial.height + 40)
+        f.frames.frame = ScreenGeometry.cocoaToAX(cocoaRect: resized, primaryScreenHeight: height)
+        let end = CGPoint(x: resized.maxX - 1, y: resized.maxY - 1)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: end)
+        #expect(bar.presentationState == .hidden)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: end)
+        #expect(f.engine.drops.isEmpty)
+    }
 }

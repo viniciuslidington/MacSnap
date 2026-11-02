@@ -5,6 +5,65 @@ import Testing
 
 @MainActor
 struct PairedResizeSessionTests {
+    @Test(arguments: [true, false])
+    func externallyChangedMemberInvalidatesDuringPreview(firstChanged: Bool) throws {
+        let f = ResizeFixture()
+        #expect(f.session.begin())
+        let window = firstChanged ? f.first : f.second
+        let frame = try #require(window.cocoaFrame(primaryScreenHeight: 1000))
+        #expect(window.setCocoaFrame(frame.offsetBy(dx: 100, dy: 0), primaryScreenHeight: 1000))
+        let writes = f.writes.names
+        f.session.update(to: 1200)
+        f.session.finish()
+        #expect(f.session.phase == .invalidated)
+        #expect(f.writes.names == writes)
+        #expect(f.reference.invalidations == 1)
+    }
+
+    @Test func boundedFrameRoundingDoesNotPreventResizeCommit() throws {
+        let f = ResizeFixture()
+        #expect(f.session.begin())
+        let frame = try #require(f.first.cocoaFrame(primaryScreenHeight: 1000))
+        #expect(f.first.setCocoaFrame(frame.offsetBy(dx: 2, dy: 2), primaryScreenHeight: 1000))
+        f.session.update(to: 1200)
+        f.session.finish()
+        f.scheduler.runAll()
+        #expect(f.session.phase == .finished)
+        #expect(f.reference.invalidations == 0)
+    }
+
+    @Test func replacingActivePairDismissesOldOverlayButOldCallbacksCannotHideSuccessor() throws {
+        _ = NSApplication.shared
+        let screen = try #require(NSScreen.screens.first)
+        let screens = ResizeScreens(screen: screen)
+        let manager = PairedResizeManager(screenService: screens,
+            windowDiscovery: NoResizeWindows(), isMasterEnabled: { true })
+        defer { manager.clearPairing() }
+        let f = ResizeFixture()
+        let next = ResizeFixture()
+        for fixture in [f, next] {
+            fixture.pair.visibleFrame = screen.visibleFrame
+            #expect(fixture.first.setCocoaFrame(SnapZone.leftHalf.targetRect(for: screen.visibleFrame), primaryScreenHeight: screens.primaryScreenHeight))
+            #expect(fixture.second.setCocoaFrame(SnapZone.rightHalf.targetRect(for: screen.visibleFrame), primaryScreenHeight: screens.primaryScreenHeight))
+            #expect(manager.isPairValidAndAdjacent(fixture.pair))
+        }
+        let nextWrites = next.writes.names
+        let state = manager.state(for: screen)
+        state.pair = f.pair
+        state.dividerWindow.onDividerDragStarted?()
+        let oldSession = try #require(state.resizeSession)
+        #expect(state.resizeOverlay.isPresenting)
+        state.pair = next.pair
+        #expect(!state.resizeOverlay.isPresenting)
+        state.dividerWindow.onDividerDragStarted?()
+        #expect(state.resizeOverlay.isPresenting)
+        oldSession.update(to: screen.visibleFrame.midX)
+        oldSession.finish()
+        oldSession.cancel()
+        #expect(state.resizeOverlay.isPresenting)
+        #expect(next.writes.names == nextWrites)
+    }
+
     @Test(arguments: [false, true])
     func fullScreenMemberPreventsPairWrites(firstIsFullScreen: Bool) {
         let f = ResizeFixture()
@@ -368,7 +427,8 @@ private final class ResizeFixture {
         let reference = self.reference
         session = PairedResizeSession(
             pair: pair, primaryScreenHeight: 1000, presentation: presentation, scheduler: scheduler,
-            isCurrent: { reference.current }, onInvalidated: { reference.invalidations += 1 }
+            isCurrent: { reference.current }, ownsPresentation: { reference.current },
+            onInvalidated: { reference.invalidations += 1 }
         )
     }
 }
@@ -498,5 +558,76 @@ private final class NoResizeWindows: WindowDiscovering {
     }
     func window(atCocoaPoint point: CGPoint, excluding: WindowElement?, primaryScreenHeight: CGFloat) -> WindowElement? {
         nil
+    }
+}
+
+
+extension PairedResizeSessionTests {
+    @Test func auditUC31MovedMemberMustNotBeOverwrittenOnRelease() throws {
+        _ = NSApplication.shared
+        let screen = try #require(NSScreen.screens.first)
+        let screens = ResizeScreens(screen: screen)
+        let manager = PairedResizeManager(screenService: screens,
+            windowDiscovery: NoResizeWindows(), isMasterEnabled: { true })
+        defer { manager.clearPairing() }
+        let f = ResizeFixture()
+        let bounds = screen.visibleFrame
+        let height = screens.primaryScreenHeight
+        f.pair.visibleFrame = bounds
+        #expect(f.first.setCocoaFrame(SnapZone.leftHalf.targetRect(for: bounds), primaryScreenHeight: height))
+        #expect(f.second.setCocoaFrame(SnapZone.rightHalf.targetRect(for: bounds), primaryScreenHeight: height))
+        let state = manager.state(for: screen)
+        state.pair = f.pair
+        #expect(manager.isPairValidAndAdjacent(f.pair))
+        state.dividerWindow.onDividerDragStarted?()
+        let session = try #require(state.resizeSession)
+        #expect(session.phase == .dragging)
+        state.dividerWindow.onDividerDragged?(bounds.minX + bounds.width * 2 / 3)
+        // Script an external move after the operation captured this pair.
+        let moved = CGRect(x: screen.frame.maxX + 3000, y: bounds.minY,
+                           width: bounds.width / 2, height: bounds.height)
+        #expect(f.first.setCocoaFrame(moved, primaryScreenHeight: height))
+        let before = f.writes.names
+        state.dividerWindow.onDividerReleased?()
+        #expect(session.phase == .invalidated)
+        #expect(f.writes.names == before)
+        #expect(f.first.cocoaFrame(primaryScreenHeight: height) == moved)
+    }
+
+    @Test func auditUC20GeometryMismatchMustDismissOwnResizeOverlay() throws {
+        _ = NSApplication.shared
+        let screen = try #require(NSScreen.screens.first)
+        let screens = ResizeScreens(screen: screen)
+        let manager = PairedResizeManager(screenService: screens,
+            windowDiscovery: NoResizeWindows(), isMasterEnabled: { true })
+        defer { manager.clearPairing() }
+        let f = ResizeFixture()
+        let bounds = screen.visibleFrame
+        let height = screens.primaryScreenHeight
+        f.pair.visibleFrame = bounds
+        #expect(f.first.setCocoaFrame(SnapZone.leftHalf.targetRect(for: bounds), primaryScreenHeight: height))
+        #expect(f.second.setCocoaFrame(SnapZone.rightHalf.targetRect(for: bounds), primaryScreenHeight: height))
+        let state = manager.state(for: screen)
+        state.pair = f.pair
+        #expect(manager.isPairValidAndAdjacent(f.pair))
+        let view = try #require(state.dividerWindow.contentView)
+        let down = try #require(NSEvent.mouseEvent(with: .leftMouseDown, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            eventNumber: 0, clickCount: 1, pressure: 1))
+        view.mouseDown(with: down)
+        let session = try #require(state.resizeSession)
+        #expect(session.phase == .dragging)
+        #expect(state.resizeOverlay.isVisible)
+        let before = f.writes.names
+        // Invalidate geometry through the real session callback, before a separate
+        // screen-configuration notification can purge state. No Dock is manipulated.
+        screens.setPrimaryScreenHeight(screens.primaryScreenHeight + 120)
+        state.dividerWindow.onDividerDragged?(screen.visibleFrame.midX)
+        #expect(session.phase == .cancelled)
+        #expect(f.writes.names == before)
+        let overlayStillPresenting = state.resizeOverlay.isPresenting
+        let overlayStillVisible = state.resizeOverlay.isVisible
+        #expect(!overlayStillPresenting)
+        #expect(!overlayStillVisible)
     }
 }

@@ -113,6 +113,8 @@ public final class WindowElement: @unchecked Sendable, Identifiable {
         return setAXFrame(axFrame)
     }
 
+    var sizeLimits: WindowSizeLimits { frameAccess.sizeLimits }
+
     /// Native full-screen state, read afresh so transitions invalidate captured interactions.
     public var isFullScreen: Bool {
         frameAccess.isFullScreen
