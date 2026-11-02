@@ -1,8 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.11] - 2026-11-02
 
 ### Fixed
+
+- Unchanged snap targets retain their exact origin; frame-conversion tests allow floating-point rounding and cover the CI runner geometry.
 
 - Snap shadows fit reported window size bounds and share placement geometry. Unavailable bounds retain the default preview; impossible or invalid bounds suppress the shadow and prevent placement.
 
