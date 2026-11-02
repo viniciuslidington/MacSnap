@@ -28,6 +28,9 @@ struct WindowSizeLimits: Sendable {
         let width = min(max(target.width, minimum?.width ?? 0), maximum?.width ?? .greatestFiniteMagnitude)
         let height = min(max(target.height, minimum?.height ?? 0), maximum?.height ?? .greatestFiniteMagnitude)
         guard width <= screen.width, height <= screen.height else { return nil }
+        // Preserve an already valid target exactly when no size adjustment is needed.
+        // Reconstructing its center can introduce rounding drift (notably thirds).
+        if width == target.width, height == target.height, screen.contains(target) { return target }
         func origin(_ low: CGFloat, _ high: CGFloat, _ screenLow: CGFloat, _ screenHigh: CGFloat, _ length: CGFloat) -> CGFloat {
             let atLow = abs(low - screenLow) < 1
             let atHigh = abs(high - screenHigh) < 1
