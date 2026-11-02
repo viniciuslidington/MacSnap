@@ -226,3 +226,12 @@ O adaptador consulta os atributos opcionais `AXMinSize`/`AXMinimumSize` e `AXMax
 O mesmo cálculo limita a prévia e o encaixe, mantendo borda ou centro e a área útil da tela. Limites são relidos ao soltar. A decisão de produto é manter a sombra padrão quando faltarem limites; nesse caso a sombra continua sendo uma estimativa. Limites de proporção, incrementos discretos e restrições dinâmicas não expostas pelo aplicativo também podem alterar o resultado nativo. Os testes usam adaptadores controlados: a exposição desses atributos pelo Settings e outros aplicativos reais ainda precisa ser validada.
 
 Referência de implementação independente para os atributos mínimos: [Rectangle — AccessibilityElement.minimumSize](https://github.com/rxhanson/Rectangle/blob/main/Rectangle/AccessibilityElement.swift). Os nomes opcionais não constituem garantia de suporte por todos os aplicativos.
+
+
+### Encaixe antecipado com ⌥ Option (UC-06/15)
+
+O switch **Hold ⌥ to Snap Earlier**, no menu do MacSnap, fica desligado por padrão e persiste em `MacSnap.isOptionSnapEnabled`. Ligado, mantém o arraste normal e antecipa a detecção de bordas/cantos enquanto Option está pressionado: a faixa de borda passa de 20 a até 120 pontos, e a de canto de 80 a até 160 pontos, limitadas pela dimensão menor da tela para evitar faixas opostas sobrepostas. É uma política do MacSnap, não uma reprodução medida das distâncias internas do macOS.
+
+Pode-se pressionar ou soltar Option durante um arraste válido, sem mover novamente o mouse. Ao soltar a tecla, volta a valer a faixa normal e um alvo antecipado pode desaparecer. A soltura do mouse revalida os modificadores antes de aplicar o alvo. Teclas não admitem uma janela nem substituem o limiar de movimento; usam a última posição observada no arraste. Mudanças do switch descartam o gesto até o mouse-up. Comandos do menu e divisor pareado conservam seu comportamento.
+
+Os testes do monitor cobrem antecipação, arraste normal, modo desligado, soltura de Option sem mover o mouse, modificadores no mouse-up, limiar de movimento e troca da preferência. O teste do menu cobre o switch e sua persistência. A execução com teclas e janelas reais de outros aplicativos ainda não foi validada.

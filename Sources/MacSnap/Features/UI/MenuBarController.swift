@@ -174,6 +174,7 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             isTopBarEnabled: eventMonitor.isTopSnapBarEnabled,
             isEdgeSnapEnabled: eventMonitor.isEdgeSnapEnabled,
             isDividerEnabled: pairingManager.isDividerEnabled,
+            isOptionSnapEnabled: eventMonitor.isOptionSnapEnabled,
             onToggleTopBar: { [weak self] isEnabled in
                 self?.eventMonitor.isTopSnapBarEnabled = isEnabled
             },
@@ -182,6 +183,9 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             },
             onToggleDivider: { [weak self] isEnabled in
                 self?.pairingManager.isDividerEnabled = isEnabled
+            },
+            onToggleOption: { [weak self] isEnabled in
+                self?.eventMonitor.isOptionSnapEnabled = isEnabled
             },
             onReconnectPair: { [weak self] in
                 self?.statusItem?.menu?.cancelTracking()
@@ -240,7 +244,8 @@ public final class MenuBarController: NSObject, NSMenuDelegate {
             isMasterEnabled: isMaster,
             isTopBarEnabled: eventMonitor.isTopSnapBarEnabled,
             isEdgeSnapEnabled: eventMonitor.isEdgeSnapEnabled,
-            isDividerEnabled: pairingManager.isDividerEnabled
+            isDividerEnabled: pairingManager.isDividerEnabled,
+            isOptionSnapEnabled: eventMonitor.isOptionSnapEnabled
         )
         horizontalMenuItem?.isEnabled = isMaster
         verticalMenuItem?.isEnabled = isMaster
@@ -810,50 +815,55 @@ private final class QuickSnapTileButton: NSView {
     }
 }
 
-// MARK: - 3. Controllers Section View (3 NSSwitch Rows + Reconnect Pair & Clear Buttons)
+// MARK: - 3. Controllers Section View (4 NSSwitch Rows + Reconnect Pair & Clear Buttons)
 
 @MainActor
 private final class ControllersSectionView: NSView {
     private let topBarSwitch = NSSwitch()
     private let edgeSnapSwitch = NSSwitch()
     private let dividerSwitch = NSSwitch()
+    private let optionSwitch = NSSwitch()
     private var reconnectButton: ActionPillButton?
     private var clearButton: ActionPillButton?
 
     private let onToggleTopBar: (Bool) -> Void
     private let onToggleEdgeSnap: (Bool) -> Void
     private let onToggleDivider: (Bool) -> Void
+    private let onToggleOption: (Bool) -> Void
 
     init(
         width: CGFloat,
         isTopBarEnabled: Bool,
         isEdgeSnapEnabled: Bool,
         isDividerEnabled: Bool,
+        isOptionSnapEnabled: Bool,
         onToggleTopBar: @escaping (Bool) -> Void,
         onToggleEdgeSnap: @escaping (Bool) -> Void,
         onToggleDivider: @escaping (Bool) -> Void,
+        onToggleOption: @escaping (Bool) -> Void,
         onReconnectPair: @escaping () -> Void,
         onClearPair: @escaping () -> Void
     ) {
         self.onToggleTopBar = onToggleTopBar
         self.onToggleEdgeSnap = onToggleEdgeSnap
         self.onToggleDivider = onToggleDivider
-        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 172))
+        self.onToggleOption = onToggleOption
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 205))
 
         let sectionLabel = NSTextField(labelWithString: "CONTROLLERS")
         sectionLabel.font = NSFont.systemFont(ofSize: 10.5, weight: .semibold)
         sectionLabel.textColor = .secondaryLabelColor
-        sectionLabel.frame = NSRect(x: 14, y: 150, width: 120, height: 14)
+        sectionLabel.frame = NSRect(x: 14, y: 183, width: 120, height: 14)
         addSubview(sectionLabel)
 
-        let cardRect = NSRect(x: 12, y: 40, width: width - 24, height: 104)
+        let cardRect = NSRect(x: 12, y: 40, width: width - 24, height: 137)
         let cardView = RoundedCardContainerView(frame: cardRect)
         addSubview(cardView)
 
         // Row 1: Top Snap Bar
         let row1 = makeControllerRow(
             width: cardRect.width,
-            y: 68,
+            y: 101,
             title: "Top Snap Bar",
             iconKind: .topBar,
             toggle: topBarSwitch,
@@ -864,7 +874,7 @@ private final class ControllersSectionView: NSView {
         // Row 2: Edge & Corner Snap
         let row2 = makeControllerRow(
             width: cardRect.width,
-            y: 35,
+            y: 68,
             title: "Edge & Corner Snap",
             iconKind: .edgeSnap,
             toggle: edgeSnapSwitch,
@@ -875,13 +885,21 @@ private final class ControllersSectionView: NSView {
         // Row 3: Paired Window Divider
         let row3 = makeControllerRow(
             width: cardRect.width,
-            y: 2,
+            y: 35,
             title: "Paired Window Divider",
             iconKind: .divider,
             toggle: dividerSwitch,
             action: #selector(dividerSwitchChanged)
         )
         cardView.addSubview(row3)
+
+        let optionRow = makeControllerRow(
+            width: cardRect.width, y: 2,
+            title: "Hold ⌥ to Snap Earlier", iconKind: .option,
+            toggle: optionSwitch, action: #selector(optionSwitchChanged)
+        )
+        optionSwitch.toolTip = "Hold Option while dragging to preview edge and corner snaps sooner. Normal dragging still works without Option."
+        cardView.addSubview(optionRow)
 
         // Bottom Action Buttons: Reconnect Pair & Clear
         let clearW: CGFloat = 68.0
@@ -908,7 +926,8 @@ private final class ControllersSectionView: NSView {
             isMasterEnabled: true,
             isTopBarEnabled: isTopBarEnabled,
             isEdgeSnapEnabled: isEdgeSnapEnabled,
-            isDividerEnabled: isDividerEnabled
+            isDividerEnabled: isDividerEnabled,
+            isOptionSnapEnabled: isOptionSnapEnabled
         )
     }
 
@@ -938,6 +957,7 @@ private final class ControllersSectionView: NSView {
         label.frame = NSRect(x: 40, y: 7, width: width - 92, height: 18)
         row.addSubview(label)
 
+        toggle.setAccessibilityLabel(title)
         toggle.controlSize = .small
         toggle.target = self
         toggle.action = action
@@ -951,15 +971,18 @@ private final class ControllersSectionView: NSView {
         isMasterEnabled: Bool,
         isTopBarEnabled: Bool,
         isEdgeSnapEnabled: Bool,
-        isDividerEnabled: Bool
+        isDividerEnabled: Bool,
+        isOptionSnapEnabled: Bool
     ) {
         alphaValue = isMasterEnabled ? 1.0 : 0.4
         topBarSwitch.isEnabled = isMasterEnabled
         edgeSnapSwitch.isEnabled = isMasterEnabled
         dividerSwitch.isEnabled = isMasterEnabled
+        optionSwitch.isEnabled = isMasterEnabled
         topBarSwitch.state = isTopBarEnabled ? .on : .off
         edgeSnapSwitch.state = isEdgeSnapEnabled ? .on : .off
         dividerSwitch.state = isDividerEnabled ? .on : .off
+        optionSwitch.state = isOptionSnapEnabled ? .on : .off
         reconnectButton?.isEnabled = isMasterEnabled && isDividerEnabled
         clearButton?.isEnabled = isMasterEnabled && isDividerEnabled
     }
@@ -967,6 +990,10 @@ private final class ControllersSectionView: NSView {
     func resetHoverState() {
         reconnectButton?.resetHoverState()
         clearButton?.resetHoverState()
+    }
+
+    @objc private func optionSwitchChanged() {
+        onToggleOption(optionSwitch.state == .on)
     }
 
     @objc private func topBarSwitchChanged() {
@@ -1001,6 +1028,7 @@ private final class ControllerIconView: NSView {
         case topBar
         case edgeSnap
         case divider
+        case option
     }
 
     private let kind: IconKind
@@ -1022,6 +1050,11 @@ private final class ControllerIconView: NSView {
         NSColor.secondaryLabelColor.setFill()
 
         switch kind {
+        case .option:
+            ("⌥" as NSString).draw(in: NSRect(x: 4, y: 3, width: 18, height: 20), withAttributes: [
+                .font: NSFont.systemFont(ofSize: 17, weight: .medium),
+                .foregroundColor: NSColor.secondaryLabelColor
+            ])
         case .topBar:
             let outer = NSBezierPath(roundedRect: NSRect(x: 4.5, y: 5.0, width: 15.0, height: 14.0), xRadius: 2.0, yRadius: 2.0)
             outer.lineWidth = 1.35
