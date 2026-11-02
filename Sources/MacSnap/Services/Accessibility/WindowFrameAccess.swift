@@ -7,8 +7,13 @@ protocol WindowFrameAccess: Sendable {
     var frame: CGRect? { get }
     var isFullScreen: Bool { get }
     var isResizable: Bool { get }
+    var sizeLimits: WindowSizeLimits { get }
     /// Acceptance of the native writes does not imply that the application reached the target.
     func setFrame(_ frame: CGRect) -> Bool
+}
+
+extension WindowFrameAccess {
+    var sizeLimits: WindowSizeLimits { .init() }
 }
 
 /// The only stored state is an immutable native handle. AX requests do not mutate Swift state.
@@ -43,6 +48,24 @@ final class AXWindowFrameAccess: WindowFrameAccess, @unchecked Sendable {
         var settable: DarwinBoolean = false
         return AXUIElementIsAttributeSettable(element, kAXSizeAttribute as CFString, &settable) == .success
             && settable.boolValue
+    }
+
+    var sizeLimits: WindowSizeLimits {
+        // These optional AX attributes are toolkit-specific, not a universal AX contract.
+        // Missing bounds remain unknown; never infer unlimited resizing from AXSize settable.
+        func read(_ names: [String]) -> CGSize? {
+            for name in names {
+                var value: CFTypeRef?
+                if AXUIElementCopyAttributeValue(element, name as CFString, &value) == .success,
+                   let size = Self.size(from: value),
+                   size.width.isFinite, size.height.isFinite, size.width >= 0, size.height >= 0 {
+                    return size
+                }
+            }
+            return nil
+        }
+        return WindowSizeLimits(minimum: read(["AXMinSize", "AXMinimumSize"]),
+                                maximum: read(["AXMaxSize", "AXMaximumSize"]))
     }
 
     func setFrame(_ frame: CGRect) -> Bool {

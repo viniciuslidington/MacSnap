@@ -21,8 +21,10 @@ final class PairedResizeSession {
     private let presentation: any PairedResizePresenting
     private let scheduler: any ActionScheduling
     private let isCurrent: () -> Bool
+    private let ownsPresentation: () -> Bool
     private let onInvalidated: () -> Void
     private var pendingSettlement: (any ScheduledAction)?
+    private var initialFrames: (CGRect, CGRect)?
 
     init(
         pair: PairedSplit,
@@ -30,6 +32,7 @@ final class PairedResizeSession {
         presentation: any PairedResizePresenting,
         scheduler: any ActionScheduling = MainActorScheduler.shared,
         isCurrent: @escaping () -> Bool,
+        ownsPresentation: @escaping () -> Bool,
         onInvalidated: @escaping () -> Void
     ) {
         self.pair = pair
@@ -37,6 +40,7 @@ final class PairedResizeSession {
         self.presentation = presentation
         self.scheduler = scheduler
         self.isCurrent = isCurrent
+        self.ownsPresentation = ownsPresentation
         self.onInvalidated = onInvalidated
     }
 
@@ -44,7 +48,8 @@ final class PairedResizeSession {
     func begin() -> Bool {
         guard phase == .idle else { return false }
         guard isCurrent() else { cancel(); return false }
-        guard validGeometry, observedFrames() != nil else { invalidate(); return false }
+        guard validGeometry, let frames = observedFrames() else { invalidate(); return false }
+        initialFrames = frames
         phase = .dragging
         presentation.present(pair: pair)
         return true
@@ -53,7 +58,7 @@ final class PairedResizeSession {
     func update(to cursorCoordinate: CGFloat) {
         guard phase == .dragging else { return }
         guard isCurrent() else { abandonStaleWork(); return }
-        guard cursorCoordinate.isFinite, observedFrames() != nil else { invalidate(); return }
+        guard cursorCoordinate.isFinite, windowsRemainUnchanged else { invalidate(); return }
         pair.updateRatioOnly(from: cursorCoordinate)
         presentation.update(pair: pair)
     }
@@ -61,7 +66,7 @@ final class PairedResizeSession {
     func finish() {
         guard phase == .dragging else { return }
         guard isCurrent() else { abandonStaleWork(); return }
-        guard observedFrames() != nil else { invalidate(); return }
+        guard windowsRemainUnchanged else { invalidate(); return }
         presentation.dismiss(animated: true)
         guard pair.applyCurrentSplit(primaryScreenHeight: primaryScreenHeight) else {
             invalidate()
@@ -100,6 +105,17 @@ final class PairedResizeSession {
               let second = pair.secondWindow.cocoaFrame(primaryScreenHeight: primaryScreenHeight),
               valid(first), valid(second) else { return nil }
         return (first, second)
+    }
+
+    /// Dragging only updates the preview. A native frame change before commit is
+    /// external to this operation; do not pull a moved/resized window back into it.
+    private var windowsRemainUnchanged: Bool {
+        guard let initialFrames, let current = observedFrames() else { return false }
+        func matches(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+            abs(lhs.minX - rhs.minX) <= 4 && abs(lhs.minY - rhs.minY) <= 4 &&
+                abs(lhs.width - rhs.width) <= 4 && abs(lhs.height - rhs.height) <= 4
+        }
+        return matches(initialFrames.0, current.0) && matches(initialFrames.1, current.1)
     }
 
     private func settle() {
@@ -171,7 +187,12 @@ final class PairedResizeSession {
         pendingSettlement?.cancel()
         pendingSettlement = nil
         phase = .cancelled
-        // A stale operation must not dismiss another operation's presentation.
+        // Geometry may expire while this operation still owns the presentation.
+        // A replaced operation must never dismiss or clear its successor.
+        if ownsPresentation() {
+            presentation.dismiss(animated: false)
+            onInvalidated()
+        }
     }
 
     private func invalidate() {

@@ -1,5 +1,15 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Snap shadows fit reported window size bounds and share placement geometry. Unavailable bounds retain the default preview; impossible or invalid bounds suppress the shadow and prevent placement.
+
+- Paired resizing cancels if either window moves or changes size outside the captured operation, instead of pulling it back into the split.
+- Expired resize geometry clears its own preview and divider while preserving presentations belonging to a replacement operation.
+- Snap recognition reserves the window boundary for native resizing and rejects size changes during the gesture or immediately before release; normal window movement and bounded geometry rounding remain eligible.
+
 ## [1.0.10] - 2026-11-01
 
 ### Fixed

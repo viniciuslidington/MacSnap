@@ -35,20 +35,27 @@ public final class SnapEngine: WindowSnappingProtocol {
         snapWindow(window, to: zone, on: screen)
     }
 
-    public func previewRect(for window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool) -> CGRect {
-        SnapTargetResolver.targetRect(
+    public func previewRect(for window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool) -> CGRect? {
+        let limits = window.sizeLimits
+        guard window.isResizable else { return nil }
+        return placementRect(for: window, to: zone, on: screen, forceExactSize: forceExactSize, limits: limits)
+    }
+
+    private func placementRect(for window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool, limits: WindowSizeLimits) -> CGRect? {
+        let proposed = SnapTargetResolver.targetRect(
             for: zone, window: window, visibleFrame: screen.visibleFrame,
             primaryScreenHeight: screenService.primaryScreenHeight,
             intent: forceExactSize ? .exactSlot : .adaptive, discovery: discovery
         )
+        return limits.fitting(proposed, within: screen.visibleFrame)
     }
 
     public func snapWindow(_ window: WindowElement, to zone: SnapZone, on screen: NSScreen, forceExactSize: Bool = false) {
         cancelPendingOperations()
         guard window.isResizable,
               let connected = screenService.screens.first(where: { $0.displayID == screen.displayID }) else { return }
-        let target = previewRect(for: window, to: zone, on: connected, forceExactSize: forceExactSize)
-        guard window.setCocoaFrame(target, primaryScreenHeight: screenService.primaryScreenHeight) else { return }
+        guard let target = placementRect(for: window, to: zone, on: connected, forceExactSize: forceExactSize, limits: window.sizeLimits),
+              window.setCocoaFrame(target, primaryScreenHeight: screenService.primaryScreenHeight) else { return }
         // Registration observes actual geometry, never recalculates an adaptive target or resizes a neighbor.
         pairingManager.registerSnap(window: window, zone: zone, screen: connected)
     }

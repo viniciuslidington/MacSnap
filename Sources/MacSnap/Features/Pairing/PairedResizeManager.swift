@@ -115,6 +115,10 @@ public final class PairedResizeManager {
                           currentScreen.visibleFrame == pair.visibleFrame else { return false }
                     return state.pair === pair
                 },
+                ownsPresentation: { [weak state, weak pair] in
+                    guard let state, let pair else { return false }
+                    return state.pair === pair
+                },
                 onInvalidated: { [weak state] in state?.clear() }
             )
             state.resizeSession = session

@@ -168,8 +168,16 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             resetDragInteraction(ignoringUntilRelease: true)
             return
         }
-        let began = recognition.drag(at: point, visibleFrame: screen.visibleFrame) {
+        let hadCandidate = recognition.window != nil
+        let began = recognition.drag(
+            at: point, visibleFrame: screen.visibleFrame,
+            frameForWindow: { $0.cocoaFrame(primaryScreenHeight: self.screenService.primaryScreenHeight) }
+        ) {
             resolveCandidate(at: point)
+        }
+        if hadCandidate && recognition.isIgnored {
+            resetDragInteraction(ignoringUntilRelease: true)
+            return
         }
         if let window = recognition.window, !window.isResizable {
             resetDragInteraction(ignoringUntilRelease: true)
@@ -283,7 +291,11 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
                 for: window, to: zone, on: screen, forceExactSize: isFromLayoutBar
             )
 
-            self.previewOverlay.present(at: targetRect, animated: true)
+            if let targetRect {
+                self.previewOverlay.present(at: targetRect, animated: true)
+            } else {
+                self.previewOverlay.dismiss()
+            }
         } else {
             clearSnapSelection()
         }
@@ -321,7 +333,9 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             resetDragInteraction()
             return
         }
-        let released = recognition.release()
+        let released = recognition.release(frameForWindow: {
+            $0.cocoaFrame(primaryScreenHeight: self.screenService.primaryScreenHeight)
+        })
         let zone = activeZone
         let screen = activeScreen ?? screenService.screenContaining(point: point)
         let exact = isZoneFromLayoutBar
