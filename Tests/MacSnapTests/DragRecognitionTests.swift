@@ -196,6 +196,138 @@ struct DragRecognitionTests {
 @MainActor
 @Suite(.serialized)
 struct GlobalEventMonitorIntegrationTests {
+    private func earlyPoint(_ f: MonitorFixture) -> CGPoint {
+        let b = f.screen.visibleFrame
+        return CGPoint(x: b.minX + 90, y: b.midY)
+    }
+
+    @Test func optionAnticipatesTheEdgeWithoutDisablingNormalDragging() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.isOptionSnapEnabled = true
+        let early = earlyPoint(f)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: early)
+        #expect(f.engine.previews.isEmpty)
+        f.monitor.handleEvent(type: .flagsChanged, atCocoaPoint: .zero, flags: .maskAlternate)
+        #expect(f.engine.previews.last == f.edgeZone)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: early, flags: .maskAlternate)
+        #expect(f.engine.drops.last?.zone == f.edgeZone)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.drops.last?.zone == f.edgeZone)
+        #expect(f.engine.drops.count == 2)
+    }
+
+    @Test(arguments: [0, 1, 2, 3, 4])
+    func optionAnticipatesCornersAndOtherEdges(target: Int) throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.isOptionSnapEnabled = true
+        let b = f.screen.visibleFrame
+        let portrait = f.screen.isPortrait
+        let targets: [(CGPoint, SnapZone)] = [
+            (CGPoint(x: b.minX + 90, y: b.maxY - 90), portrait ? .topThird : .topLeftQuarter),
+            (CGPoint(x: b.maxX - 90, y: b.minY + 90), portrait ? .bottomHalf : .bottomRightQuarter),
+            (CGPoint(x: b.midX, y: b.maxY - 90), portrait ? .topHalf : .maximize),
+            (CGPoint(x: b.midX, y: b.minY + 90), .bottomHalf),
+            (CGPoint(x: b.maxX - 90, y: b.midY), portrait ? .middleThird : .rightHalf)
+        ]
+        let (point, zone) = targets[target]
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start, flags: .maskAlternate)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: point, flags: .maskAlternate)
+        #expect(f.engine.previews.last == zone)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: point, flags: .maskAlternate)
+        #expect(f.engine.drops.last?.zone == zone)
+    }
+
+    @Test func optionDoesNotOverrideDisabledEdgeSnapping() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.isOptionSnapEnabled = true
+        f.monitor.isEdgeSnapEnabled = false
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start, flags: .maskAlternate)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: earlyPoint(f), flags: .maskAlternate)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: earlyPoint(f), flags: .maskAlternate)
+        #expect(f.engine.previews.isEmpty)
+        #expect(f.engine.drops.last?.zone == nil)
+    }
+
+    @Test func disabledOptionSwitchKeepsOriginalDetectionDistances() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start, flags: .maskAlternate)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: earlyPoint(f), flags: .maskAlternate)
+        #expect(f.engine.previews.isEmpty)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge, flags: .maskAlternate)
+        #expect(f.engine.previews.last == f.edgeZone)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge, flags: .maskAlternate)
+        #expect(f.engine.drops.last?.zone == f.edgeZone)
+    }
+
+    @Test func optionReleaseClearsTheEarlyPreviewWithoutMouseMovement() async throws {
+        let existing = Set(NSApplication.shared.windows.map(ObjectIdentifier.init))
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.isOptionSnapEnabled = true
+        let preview = try #require(NSApplication.shared.windows
+            .filter { !existing.contains(ObjectIdentifier($0)) }
+            .compactMap { $0 as? PreviewOverlayWindow }.first)
+        await withCompletedAppKitAnimations {
+            f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start, flags: .maskAlternate)
+            f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: earlyPoint(f), flags: .maskAlternate)
+        }
+        #expect(preview.isVisible)
+        await withCompletedAppKitAnimations {
+            f.monitor.handleEvent(type: .flagsChanged, atCocoaPoint: .zero)
+        }
+        #expect(!preview.isVisible)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: earlyPoint(f))
+        #expect(f.engine.drops.last?.zone == nil)
+    }
+
+    @Test func releaseFlagsPreventAStaleEarlySnapAndAllowANormalEdgeSnap() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.isOptionSnapEnabled = true
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start, flags: .maskAlternate)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: earlyPoint(f), flags: .maskAlternate)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: earlyPoint(f))
+        #expect(f.engine.drops.last?.zone == nil)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start, flags: .maskAlternate)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge, flags: .maskAlternate)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge)
+        #expect(f.engine.drops.last?.zone == f.edgeZone)
+    }
+
+    @Test func optionKeyCannotAdmitAWindowOrReplaceTheMovementThreshold() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.isOptionSnapEnabled = true
+        f.monitor.handleEvent(type: .flagsChanged, atCocoaPoint: f.start, flags: .maskAlternate)
+        #expect(f.access.hitTests == 0)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .flagsChanged, atCocoaPoint: earlyPoint(f), flags: .maskAlternate)
+        #expect(!f.monitor.hasActiveWindowInteraction)
+        #expect(f.engine.previews.isEmpty)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.start, flags: .maskAlternate)
+        #expect(f.engine.drops.isEmpty)
+    }
+
+    @Test func changingOptionModeCancelsTheCurrentGestureUntilMouseUp() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        let count = f.engine.previews.count
+        f.monitor.isOptionSnapEnabled = true
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge, flags: .maskAlternate)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge, flags: .maskAlternate)
+        #expect(f.engine.previews.count == count)
+        #expect(f.engine.drops.isEmpty)
+    }
+
     @Test(arguments: [0, 1, 2, 3, 4])
     func resizeBorderIsRejectedEvenWithoutSizeChange(edge: Int) throws {
         let f = try MonitorFixture()
@@ -489,6 +621,21 @@ struct GlobalEventMonitorIntegrationTests {
         #expect(fixture.engine.cancellations > cancellations)
     }
 
+    @Test func optionModifierCannotReviveAPreviewUsingAFallbackDisplay() throws {
+        let f = try MonitorFixture()
+        defer { f.cleanUp() }
+        f.monitor.isOptionSnapEnabled = true
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.start)
+        f.monitor.handleEvent(type: .leftMouseDragged, atCocoaPoint: f.edge)
+        let previews = f.engine.previews.count
+        f.screens.returnsFallbackAfterDisconnection = true
+        f.screens.isConnected = false
+        f.monitor.handleEvent(type: .flagsChanged, atCocoaPoint: .zero, flags: .maskAlternate)
+        #expect(f.engine.previews.count == previews)
+        f.monitor.handleEvent(type: .leftMouseUp, atCocoaPoint: f.edge, flags: .maskAlternate)
+        #expect(f.engine.drops.isEmpty)
+    }
+
     @Test func removedDisplayAtReleaseCannotUseTheRetainedPreviewScreen() throws {
         let fixture = try MonitorFixture()
         defer { fixture.cleanUp() }
@@ -540,7 +687,7 @@ private final class MonitorFixture {
     let edge: CGPoint
     let edgeZone: SnapZone
     private let preferences: [String: Any]
-    private static let keys = ["MacSnap.isMasterEnabled", "MacSnap.isTopSnapBarEnabled", "MacSnap.isEdgeSnapEnabled", "MacSnap.isDividerEnabled"]
+    private static let keys = ["MacSnap.isMasterEnabled", "MacSnap.isTopSnapBarEnabled", "MacSnap.isEdgeSnapEnabled", "MacSnap.isDividerEnabled", "MacSnap.isOptionSnapEnabled"]
 
     init() throws {
         _ = NSApplication.shared
@@ -567,6 +714,7 @@ private final class MonitorFixture {
         pairing.isDividerEnabled = true
         monitor = GlobalEventMonitor(screenService: screens, accessibilityService: access, snapEngine: engine, pairingManager: pairing)
         monitor.isMasterEnabled = true
+        monitor.isOptionSnapEnabled = false
         monitor.isTopSnapBarEnabled = false
         monitor.isEdgeSnapEnabled = true
         engine.cancellations = 0
@@ -612,6 +760,11 @@ private final class MonitorTestScreens: ScreenServiceProtocol, @unchecked Sendab
     let screen: NSScreen
     private let lock = NSLock()
     private var connected = true
+    private var fallback = false
+    var returnsFallbackAfterDisconnection: Bool {
+        get { lock.withLock { fallback } }
+        set { lock.withLock { fallback = newValue } }
+    }
     init(screen: NSScreen) { self.screen = screen }
     var isConnected: Bool {
         get { lock.withLock { connected } }
@@ -619,8 +772,8 @@ private final class MonitorTestScreens: ScreenServiceProtocol, @unchecked Sendab
     }
     var screens: [NSScreen] { isConnected ? [screen] : [] }
     var primaryScreen: NSScreen? { isConnected ? screen : nil }
-    var primaryScreenHeight: CGFloat { isConnected ? screen.frame.height : 0 }
-    func screenContaining(point: CGPoint) -> NSScreen? { isConnected ? screen : nil }
+    var primaryScreenHeight: CGFloat { isConnected || returnsFallbackAfterDisconnection ? screen.frame.height : 0 }
+    func screenContaining(point: CGPoint) -> NSScreen? { isConnected || returnsFallbackAfterDisconnection ? screen : nil }
     func screenContaining(rect: CGRect) -> NSScreen? { isConnected ? screen : nil }
 }
 

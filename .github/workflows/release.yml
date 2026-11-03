@@ -36,11 +36,10 @@ jobs:
       - name: Validate candidate identity and configuration
         run: |
           python3 - <<'PY'
-          import base64, os, plistlib, re
+          import base64, os, plistlib, runpy
           info = plistlib.load(open('Resources/Info.plist', 'rb'))
           tag = os.environ['RELEASE_TAG']
-          assert re.fullmatch(r'v\d+\.\d+\.\d+', tag), 'Invalid release tag'
-          assert tag == 'v' + info['CFBundleShortVersionString'], 'Tag/version mismatch'
+          runpy.run_path('scripts/update-distribution.py')['validate_release_tag'](tag, info)
           assert len(base64.b64decode(os.environ['MACSNAP_UPDATE_PUBLIC_KEY'], validate=True)) == 32, 'Configure the public update key first'
           PY
       - name: Test app and distribution policies

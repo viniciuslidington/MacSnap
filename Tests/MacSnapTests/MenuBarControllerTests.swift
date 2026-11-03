@@ -9,6 +9,37 @@ struct MenuBarControllerTests {
         _ = NSApplication.shared
     }
 
+    @Test func optionSwitchPersistsAndReflectsMonitorState() throws {
+        let key = "MacSnap.isOptionSnapEnabled"
+        let saved = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let saved { UserDefaults.standard.set(saved, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        UserDefaults.standard.removeObject(forKey: key)
+        let monitor = GlobalEventMonitor(accessibilityService: MenuTestAccessibility(), snapEngine: MenuTestSnapEngine())
+        #expect(!monitor.isOptionSnapEnabled)
+        let controller = MenuBarController(accessibilityService: MenuTestAccessibility(), eventMonitor: monitor)
+        let status = try #require(controller.statusItem)
+        defer { NSStatusBar.system.removeStatusItem(status) }
+        let menu = try #require(status.menu)
+        let toggle = try #require(button(named: "Hold ⌥ to Snap Earlier", in: menu) as? NSSwitch)
+        #expect(toggle.state == .off)
+        let row = try #require(toggle.superview)
+        #expect(row.bounds.contains(toggle.frame))
+        let label = try #require(row.subviews.compactMap { $0 as? NSTextField }.first)
+        #expect(label.frame.maxX <= toggle.frame.minX)
+        toggle.state = .on
+        #expect(toggle.sendAction(toggle.action, to: toggle.target))
+        #expect(monitor.isOptionSnapEnabled)
+        #expect(UserDefaults.standard.bool(forKey: key))
+        let reopened = GlobalEventMonitor(accessibilityService: MenuTestAccessibility(), snapEngine: MenuTestSnapEngine())
+        #expect(reopened.isOptionSnapEnabled)
+        monitor.isOptionSnapEnabled = false
+        controller.menuWillOpen(menu)
+        #expect(toggle.state == .off)
+    }
+
     @Test func quickSnapClickDoesNotKeepHoverWhenMenuReopens() throws {
         let engine = MenuTestSnapEngine()
         let controller = MenuBarController(

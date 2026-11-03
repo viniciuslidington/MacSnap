@@ -15,6 +15,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private var activeZone: SnapZone?
     private var activeScreen: NSScreen?
     private var isZoneFromLayoutBar = false
+    private var lastDragPoint: CGPoint?
 
     /// Used by application shutdown to avoid interrupting a window gesture.
     var hasActiveWindowInteraction: Bool { recognition.isDragging }
@@ -22,6 +23,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     private static let masterEnabledKey = "MacSnap.isMasterEnabled"
     private static let topSnapBarEnabledKey = "MacSnap.isTopSnapBarEnabled"
     private static let edgeSnapEnabledKey = "MacSnap.isEdgeSnapEnabled"
+    private static let optionSnapEnabledKey = "MacSnap.isOptionSnapEnabled"
 
     public var isMasterEnabled: Bool = (UserDefaults.standard.object(forKey: masterEnabledKey) as? Bool) ?? true {
         didSet {
@@ -56,6 +58,15 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         }
     }
 
+    public var isOptionSnapEnabled: Bool = UserDefaults.standard.bool(forKey: optionSnapEnabledKey) {
+        didSet {
+            UserDefaults.standard.set(isOptionSnapEnabled, forKey: Self.optionSnapEnabledKey)
+            if isOptionSnapEnabled != oldValue {
+                resetDragInteraction(ignoringUntilRelease: recognition.window != nil || recognition.isIgnored)
+            }
+        }
+    }
+
     private let screenService: ScreenServiceProtocol
     private let accessibilityService: AccessibilityServiceProtocol
     private let previewOverlay: PreviewOverlayWindow
@@ -84,14 +95,16 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         let context = EventTapContext(monitor: self, generation: monitoringGeneration)
         eventTapContext = context
         let mask = (1 << CGEventType.leftMouseDragged.rawValue) | (1 << CGEventType.leftMouseUp.rawValue)
+            | (1 << CGEventType.flagsChanged.rawValue)
         let callback: CGEventTapCallBack = { _, type, event, userInfo in
             guard let userInfo else { return Unmanaged.passUnretained(event) }
             let context = Unmanaged<EventTapContext>.fromOpaque(userInfo).takeUnretainedValue()
             let point = event.location
             let generation = context.generation
-            // Snapshot event-time coordinates; do not retain CGEvent across the actor hop.
+            let flags = event.flags
+            // Snapshot event-time coordinates and modifiers; do not retain CGEvent across the actor hop.
             Task { @MainActor [weak monitor = context.monitor] in
-                monitor?.handleCapturedEvent(type: type, atAXPoint: point, generation: generation)
+                monitor?.handleCapturedEvent(type: type, atAXPoint: point, flags: flags, generation: generation)
             }
             return Unmanaged.passUnretained(event)
         }
@@ -131,19 +144,26 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         eventTapContext = nil
     }
 
-    private func handleCapturedEvent(type: CGEventType, atAXPoint point: CGPoint, generation: UInt64) {
+    private func handleCapturedEvent(type: CGEventType, atAXPoint point: CGPoint, flags: CGEventFlags, generation: UInt64) {
         guard generation == monitoringGeneration, eventTap != nil else { return }
         let cocoaPoint = ScreenGeometry.axPointToCocoa(
             axPoint: point, primaryScreenHeight: screenService.primaryScreenHeight
         )
-        handleEvent(type: type, atCocoaPoint: cocoaPoint)
+        handleEvent(type: type, atCocoaPoint: cocoaPoint, flags: flags)
     }
 
     /// Internal event seam: tests use the same gesture and placement path as native capture.
-    func handleEvent(type: CGEventType, atCocoaPoint point: CGPoint) {
+    func handleEvent(type: CGEventType, atCocoaPoint point: CGPoint, flags: CGEventFlags = []) {
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
             resetDragInteraction(ignoringUntilRelease: recognition.window != nil || recognition.isIgnored)
             if let eventTap { CGEvent.tapEnable(tap: eventTap, enable: true) }
+            return
+        }
+        // Validate the retained display before modifier/release re-evaluation can
+        // replace it with screenContaining's primary-display fallback.
+        if (type == .leftMouseUp || type == .flagsChanged), let activeScreen,
+           !screenService.screens.contains(where: { $0.displayID == activeScreen.displayID }) {
+            resetDragInteraction(ignoringUntilRelease: type != .leftMouseUp)
             return
         }
         // A release must terminate ignored gestures even while paused or using the divider.
@@ -151,19 +171,31 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             if !isMasterEnabled || pairingManager.isDraggingDivider {
                 resetDragInteraction()
             } else {
+                if isOptionSnapEnabled, recognition.isDragging, let lastDragPoint {
+                    handleDrag(at: lastDragPoint, flags: flags)
+                }
                 handleRelease(at: point)
             }
             return
         }
-        guard type == .leftMouseDragged else { return }
+        // Modifier events reuse the last pointer observation; keys alone cannot
+        // admit a window, move across the threshold or select another display.
+        let dragPoint: CGPoint
+        if type == .flagsChanged {
+            guard isOptionSnapEnabled, recognition.window != nil, let lastDragPoint else { return }
+            dragPoint = lastDragPoint
+        } else if type == .leftMouseDragged {
+            lastDragPoint = point
+            dragPoint = point
+        } else { return }
         guard isMasterEnabled, !pairingManager.isDraggingDivider else {
             resetDragInteraction(ignoringUntilRelease: true)
             return
         }
-        handleDrag(at: point)
+        handleDrag(at: dragPoint, flags: flags)
     }
 
-    private func handleDrag(at point: CGPoint) {
+    private func handleDrag(at point: CGPoint, flags: CGEventFlags) {
         guard let screen = screenService.screenContaining(point: point) else {
             resetDragInteraction(ignoringUntilRelease: true)
             return
@@ -203,8 +235,11 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
         // dragging a window or tab past the intentional movement threshold.
 
         let visibleFrame = screen.visibleFrame
-        let edgeThreshold: CGFloat = 20.0
-        let cornerThreshold: CGFloat = 80.0
+        let isAccelerated = isOptionSnapEnabled && flags.contains(.maskAlternate)
+        // Earlier activation while keeping opposite target bands separate on small displays.
+        let shortSide = min(visibleFrame.width, visibleFrame.height)
+        let edgeThreshold: CGFloat = isAccelerated ? min(120, shortSide / 4) : 20
+        let cornerThreshold: CGFloat = isAccelerated ? min(160, shortSide / 3) : 80
         let isPortrait = screen.isPortrait
 
         let isLeft = point.x <= visibleFrame.minX + edgeThreshold
@@ -333,6 +368,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
             resetDragInteraction()
             return
         }
+        lastDragPoint = nil
         let released = recognition.release(frameForWindow: {
             $0.cocoaFrame(primaryScreenHeight: self.screenService.primaryScreenHeight)
         })
@@ -354,6 +390,7 @@ public final class GlobalEventMonitor: EventMonitoringProtocol {
     }
 
     private func resetDragInteraction(ignoringUntilRelease: Bool = false) {
+        lastDragPoint = nil
         recognition.reset(ignoringUntilRelease: ignoringUntilRelease)
         clearSnapSelection()
         snapLayoutBar.dismiss(animated: false)

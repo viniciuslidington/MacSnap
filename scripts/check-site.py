@@ -23,6 +23,7 @@ class Page(HTMLParser):
         self.metadata = {}
         self.h1s = 0
         self.downloads = 0
+        self.installation_links = 0
         self.language = None
         self.install_command = []
         self.in_install_code = False
@@ -52,6 +53,9 @@ class Page(HTMLParser):
             self.alternates[attrs.get("hreflang")] = attrs.get("href")
         if tag == "a" and "data-language-link" in attrs:
             self.language_links.append(attrs)
+        if tag == "a" and "data-install-link" in attrs:
+            assert attrs.get("href") == "#instalar", "Download navigation must lead to installation guidance"
+            self.installation_links += 1
         if tag == "img":
             assert "alt" in attrs, "Image without alt attribute"
             assert attrs.get("width") and attrs.get("height"), "Image without explicit dimensions"
@@ -89,7 +93,8 @@ def check_page(path, language, canonical, social_name):
     page.feed(path.read_text(encoding="utf-8"))
     assert page.language == language
     assert page.h1s == 1, "Expected one primary heading"
-    assert page.downloads >= 3, "Missing primary release download links"
+    assert page.downloads == 1, "Keep the release download in the installation section"
+    assert page.installation_links == 3, "Header, hero and closing actions must show installation guidance"
     expected_command = '/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/viniciuslidington/MacSnap/main/install.sh)"'
     assert "".join(page.install_command) == expected_command, "Keep the copyable install command intact on one line"
     for reference in page.references:

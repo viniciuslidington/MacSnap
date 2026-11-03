@@ -24,11 +24,22 @@ class InstallerRolloutTests(unittest.TestCase):
             "name": "MacSnap.dmg", "browser_download_url": url or
             f"https://github.com/{updates.REPO}/releases/download/v1.0.8/MacSnap.dmg"}]}
 
+    def test_revision_download_keeps_guidance_and_immutable_url(self):
+        rendered = locales.render_all(release_tag="v1.0.11-build.12")
+        for path, text in rendered.items():
+            if path.suffix == ".html":
+                self.assertEqual(text.count('href="https://github.com/' + updates.REPO +
+                    '/releases/download/v1.0.11-build.12/MacSnap.dmg"'), 1)
+                self.assertEqual(text.count('href="#instalar" data-install-link'), 3)
+        for tag in ["v1.0.11-build.0", "v1.0.11-build.012", "v1.0.11/elsewhere"]:
+            with self.subTest(tag=tag), self.assertRaises(AssertionError):
+                locales.render_all(release_tag=tag)
+
     def test_unreleased_installer_keeps_working_zip_links_and_guidance(self):
         for path, text in locales.render_all().items():
             if path.suffix == ".html":
                 self.assertEqual(text.count('href="https://github.com/' + updates.REPO +
-                                            '/releases/latest/download/MacSnap.app.zip"'), 4)
+                                            '/releases/latest/download/MacSnap.app.zip"'), 1)
                 self.assertNotIn("MacSnap.dmg", text)
 
     def test_only_verified_dmg_receipt_promotes_both_languages(self):
@@ -38,8 +49,11 @@ class InstallerRolloutTests(unittest.TestCase):
             updates.hydrate_downloads(site, self.release(), {"dmg_sha256": "a" * 64})
             for route in ["index.html", "pt/index.html"]:
                 text = (site / route).read_text()
-                self.assertEqual(text.count('href="' + self.release()["assets"][0]["browser_download_url"] + '"'), 4)
+                self.assertEqual(text.count('href="' + self.release()["assets"][0]["browser_download_url"] + '"'), 1)
                 self.assertNotIn("/download/MacSnap.app.zip", text)
+                self.assertEqual(text.count('href="#instalar" data-install-link'), 3)
+                self.assertIn('id="terminal-install"', text)
+                self.assertIn("macos-open-warning.png", text)
             self.assertIn("double-click", (site / "index.html").read_text())
             self.assertIn("atalho de Aplicativos", (site / "pt/index.html").read_text())
 

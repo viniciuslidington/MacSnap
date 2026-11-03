@@ -91,21 +91,21 @@
     "editor_at_the_top_browser_in_the_middle_reference_at_the": "Editor no topo, navegador no meio, referência na base. Escolha a posição de cada janela e mantenha as três visíveis, uma acima da outra.",
     "some_apps_enforce_minimum_window_sizes_which_can_limit_t": "Alguns aplicativos têm tamanhos mínimos de janela que podem limitar certos encaixes.",
     "ready_to_try_it": "PRONTO PARA EXPERIMENTAR?",
-    "a_small_app": "Um pequeno app.",
-    "a_little_more_room": "Um novo espaço.",
+    "a_small_app": "Instale o MacSnap.",
+    "a_little_more_room": "Saiba o que esperar.",
     "move_it_to_applications": "Leve para Aplicativos.",
     "allow_accessibility_access": "Permita Acessibilidade.",
-    "in_system_settings_privacy_security_accessibility_allow_": "Em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade, autorize o MacSnap a organizar as janelas.",
-    "independently_distributed": "Uma distribuição independente.",
-    "the_current_release_is_ad_hoc_signed_and_isn_t_notarized": "A versão atual tem assinatura ad-hoc e não é notarizada pela Apple. O macOS pode apresentar um aviso ao abrir. Confira a",
+    "in_system_settings_privacy_security_accessibility_allow_": "Em Ajustes do Sistema → Privacidade e Segurança → Acessibilidade, ative o MacSnap para mover e redimensionar janelas. Essa permissão é separada e necessária nos dois métodos de instalação.",
+    "independently_distributed": "Por que o macOS mostra esse aviso?",
+    "the_current_release_is_ad_hoc_signed_and_isn_t_notarized": "O MacSnap usa assinatura ad hoc, sem certificado Developer ID ou notarização da Apple. Esse aviso significa que a Apple não conseguiu verificar o app; ele não indica, por si só, que um malware foi detectado.",
     "apple_s_official_guidance": "orientação oficial da Apple",
     "and_only_open_apps_from_sources_you_trust": "e abra somente aplicativos de fontes em que você confia.",
     "download_didn_t_start": "O download não começou?",
     "visit_the_release_page": "Abra a página da release",
-    "prefer_the_terminal": "Prefere instalar pelo Terminal?",
-    "get_the_installation_command": "Veja o comando de instalação.",
-    "the_installer_downloads_the_app_sets_up_launch_at_login_": "O instalador baixa o app, configura o início de sessão e abre os ajustes de Acessibilidade. Você pode",
-    "read_the_script_before_running_it": "ler o script antes de executar",
+    "prefer_the_terminal": "02 / Terminal — para usuários experientes",
+    "get_the_installation_command": "Confira o script e copie o comando.",
+    "the_installer_downloads_the_app_sets_up_launch_at_login_": "Este comando baixa e executa nosso instalador. Ele instala a release mais recente em Aplicativos, configura a abertura no login e abre os ajustes de Acessibilidade. Se não conseguir baixar uma release, tenta compilar o código-fonte. Antes de executar,",
+    "read_the_script_before_running_it": "leia o script antes de executar",
     "copy_command": "Copiar comando",
     "small_by_design_open_by_choice": "PEQUENO NO ESCOPO. ABERTO POR ESCOLHA.",
     "built_with_swift": "Feito em Swift.",
@@ -146,7 +146,29 @@
     "a_project_by": "Um projeto de",
     "vinicius_lidington": "Vinicius Lidington",
     "project_links": "Links do projeto",
-    "releases": "Releases"
+    "releases": "Releases",
+    "install_intro": "Escolha o download ou o Terminal. Os dois caminhos instalam o mesmo app e precisam da sua permissão para organizar janelas.",
+    "install_route_label": "01 / DOWNLOAD — RECOMENDADO",
+    "open_anyway_title": "Confira o aviso do macOS.",
+    "open_anyway_body": "Se o macOS disser que não pode verificar o MacSnap, clique em Concluído (Done). Em Ajustes do Sistema → Privacidade e Segurança, role até Segurança, escolha Abrir Mesmo Assim para o MacSnap e confirme em Abrir. Faça isso apenas se confiar na origem do download.",
+    "warning_alt": "Aviso do macOS: a Apple não pôde verificar se MacSnap.app está livre de malware. Botões: Mover para o Lixo e Concluído.",
+    "warning_caption": "Exemplo do aviso na primeira abertura. O texto varia conforme a versão do macOS.",
+    "notarization_cost": "A assinatura padrão do Apple Developer Program custa US$ 99 por ano, com preços regionais. Este projeto independente mantém, por enquanto, a distribuição sem essa assinatura. O MacSnap continua gratuito e open source.",
+    "apple_program_link": "Veja os detalhes do programa da Apple",
+    "trust_explanation": "Open source significa que você pode consultar o código, não que ele foi revisado pela Apple ou que tem segurança garantida. Confira a origem da release antes de autorizar o app.",
+    "review_source": "Consultar o código-fonte",
+    "after_install": "Após instalar, procure o MacSnap na barra de menus. Se o encaixe parar depois de atualizar, remova a entrada antiga em Acessibilidade e adicione /Applications/MacSnap.app novamente.",
+    "terminal_permissions": "Downloads pelo curl podem não receber a mesma marca de quarentena dos downloads pelo navegador, então o aviso de primeira abertura pode ser diferente. Isso não é notarização nem garantia de instalação sem avisos. A permissão de Acessibilidade continua necessária; o instalador não desativa o Gatekeeper nem remove atributos de quarentena.",
+    "native_tiling_title": "Deixe o encaixe de janelas com o MacSnap.",
+    "native_tiling_intro": "No macOS Sequoia 15 ou posterior, desative os gestos nativos de mosaico antes de usar o MacSnap. Abra Ajustes do Sistema → Mesa e Dock → Janelas e desative:",
+    "native_tiling_edges": "Arrastar janelas para a borda esquerda ou direita da tela para organizá-las em mosaico.",
+    "native_tiling_menubar": "Arrastar janelas para a barra de menus para preencher a tela.",
+    "native_tiling_option": "Manter a tecla Option pressionada ao arrastar janelas para organizá-las em mosaico.",
+    "native_tiling_footer": "Assim, o macOS e o MacSnap não respondem ao mesmo arraste. Os nomes variam conforme a versão do macOS; se esses ajustes não existirem em uma versão anterior, pule esta etapa. Faça essa configuração nos dois métodos de instalação.",
+    "native_tiling_url": "https://support.apple.com/pt-br/guide/mac-help/mchl118087b0/mac",
+    "native_tiling_link": "Guia de mosaico de janelas da Apple",
+    "native_tiling_image_alt": "Ajustes de mosaico de janelas do macOS em inglês, com as opções de bordas, barra de menus, arraste com Option e margens desativadas.",
+    "native_tiling_image_caption": "Referência visual: desative as três primeiras opções descritas acima. Os nomes podem variar conforme a versão do macOS."
   },
   "ui": {
     "copySuccess": "Comando copiado. Você pode conferir o script antes de executá-lo.",
@@ -161,12 +183,14 @@
     "zip": {
       "first_title": "Baixe e extraia.",
       "first_body": "Baixe o ZIP da release e extraia o MacSnap.app.",
-      "second_body": "Mova o app para a pasta Aplicativos e abra o MacSnap. Ele fica na barra de menus."
+      "second_body": "Mova o app para a pasta Aplicativos e abra o MacSnap. Ele fica na barra de menus.",
+      "download_label": "Baixar ZIP"
     },
     "dmg": {
       "first_title": "Baixe e abra.",
       "first_body": "Baixe o MacSnap.dmg e dê dois cliques para abrir o instalador.",
-      "second_body": "Arraste o MacSnap para o atalho de Aplicativos no instalador. Abra o app pela pasta Aplicativos e ejete a imagem de disco. O MacSnap fica na barra de menus."
+      "second_body": "Arraste o MacSnap para o atalho de Aplicativos no instalador. Abra o app pela pasta Aplicativos e ejete a imagem de disco. O MacSnap fica na barra de menus.",
+      "download_label": "Baixar DMG"
     }
   }
 }

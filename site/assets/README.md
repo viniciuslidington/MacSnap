@@ -31,4 +31,8 @@ The WOFF2 files came from the official [Google Fonts CSS API](https://developers
 - [`fonts/newsreader-latin.woff2`](https://fonts.gstatic.com/s/newsreader/v26/cY9qfjOCX1hbuyalUrK49dLac06G1ZGsZBt4ByzBDXXD9JVF438weI_wC-ZFHDWwgUii.woff2): [Newsreader](https://fonts.google.com/specimen/Newsreader), normal, static weight 400, optical size 72, 21,704 bytes; license in `fonts/Newsreader-OFL.txt`.
 - [`fonts/newsreader-latin-italic.woff2`](https://fonts.gstatic.com/s/newsreader/v26/cY9kfjOCX1hbuyalUrK439vogqC9yFZCYg7oRYaIP4obnf7fTXglsMwoT9ZHFjSShVCjzSY.woff2): Newsreader, italic, static weight 400, optical size 72, 22,984 bytes; same license.
 
-The original SIL Open Font License texts are retained unchanged from the official [DM Sans](https://github.com/google/fonts/tree/main/ofl/dmsans) and [Newsreader](https://github.com/google/fonts/tree/main/ofl/newsreader) font directories. These are the only third-party visual assets used here. The MacSnap icon is the repository's original branding.
+The original SIL Open Font License texts are retained unchanged from the official [DM Sans](https://github.com/google/fonts/tree/main/ofl/dmsans) and [Newsreader](https://github.com/google/fonts/tree/main/ofl/newsreader) font directories. The MacSnap icon is the repository's original branding. The macOS screenshot below is documented separately.
+
+- `macos-open-warning.png`: screenshot supplied by the maintainer of the real Gatekeeper warning on first launch. It is an example, not a simulated assurance of Apple verification; the wording can vary by macOS version.
+
+- `macos-window-tiling-settings.png`: maintainer-provided screenshot of the native macOS window tiling switches, displayed unchanged as a visual reference in both languages.

@@ -34,6 +34,18 @@ def require(condition, message):
         raise ValueError(message)
 
 
+def release_tag_identity(tag):
+    match = re.fullmatch(r"v([0-9]+\.[0-9]+\.[0-9]+)(?:-build\.([1-9][0-9]*))?", tag)
+    require(match is not None, "Invalid release tag")
+    return match[1], int(match[2]) if match[2] else None
+
+
+def validate_release_tag(tag, info):
+    version, build = release_tag_identity(tag)
+    require(version == info["CFBundleShortVersionString"], "Tag/application version disagreement")
+    require(build is None or build == int(info["CFBundleVersion"]), "Tag/application build disagreement")
+
+
 def decoded(value, length, name):
     try:
         data = base64.b64decode(value, validate=True)
@@ -68,7 +80,8 @@ def entries(data):
         enclosure = item.find("enclosure")
         require(enclosure is not None, "Missing update archive")
         expected = f"https://github.com/{REPO}/releases/download/v{version}/MacSnap.app.zip"
-        require(enclosure.get("url") == expected, "Update archive must use its immutable release URL")
+        revision = f"https://github.com/{REPO}/releases/download/v{version}-build.{int(build)}/MacSnap.app.zip"
+        require(enclosure.get("url") in {expected, revision}, "Update archive must use its immutable release URL")
         length = enclosure.get("length", "")
         require(length.isdecimal() and int(length) > 0, "Invalid archive length")
         decoded(enclosure.get(f"{{{NS}}}edSignature"), 64, "archive signature")
@@ -191,12 +204,14 @@ def assemble(args):
 def verify(archive, feed, public, tag):
     decoded(public, 32, "public key")
     info = archive_info(archive)
-    require(tag == "v" + info["CFBundleShortVersionString"], "Tag/application version disagreement")
+    validate_release_tag(tag, info)
     offered = entries(feed)
     build = int(info["CFBundleVersion"])
     require(build in offered, "Archive build is absent from feed")
     require(build == max(offered), "Candidate archive must be the newest feed build")
     item, enclosure = offered[build]
+    require(enclosure.get("url") == f"https://github.com/{REPO}/releases/download/{tag}/MacSnap.app.zip",
+            "Tag/archive release URL disagreement")
     require(item.findtext(f"{{{NS}}}shortVersionString") == info["CFBundleShortVersionString"],
             "Feed/application versions disagree")
     require(info.get("SUPublicEDKey") == public, "Application/public release keys disagree")
@@ -211,8 +226,8 @@ def verify(archive, feed, public, tag):
 
 def prepare(args):
     info = archive_info(args.archive)
-    tag = "v" + info["CFBundleShortVersionString"]
-    require(args.tag == tag, "Tag and application version disagree")
+    tag = args.tag
+    validate_release_tag(tag, info)
     public = os.environ.get("MACSNAP_UPDATE_PUBLIC_KEY", "").strip()
     secret = os.environ.get("MACSNAP_UPDATE_PRIVATE_KEY", "").strip()
     decoded(public, 32, "public key")
@@ -287,7 +302,7 @@ def hydrate(args):
         target.write_bytes(apply_withdrawals(live))
         return
     tag = latest.get("tag_name", "")
-    require(re.fullmatch(r"v\d+\.\d+\.\d+", tag), "Unsupported latest-release tag")
+    version, revision_build = release_tag_identity(tag)
     expected = f"https://github.com/{REPO}/releases/download/{tag}/appcast.xml"
     require(asset["browser_download_url"] == expected, "Unexpected feed asset URL")
     candidate = fetch(expected)
@@ -301,8 +316,12 @@ def hydrate(args):
             re.fullmatch(r"[a-f0-9]{64}", receipt.get("archive_sha256", "")),
             "Publication receipt does not match release feed")
     offered = entries(candidate)
-    require(offered and offered[max(offered)][0].findtext(f"{{{NS}}}shortVersionString") == tag[1:],
+    require(offered and offered[max(offered)][0].findtext(f"{{{NS}}}shortVersionString") == version
+            and (revision_build is None or revision_build == max(offered)),
             "Latest-release feed/version disagreement")
+    require(offered[max(offered)][1].get("url") ==
+            f"https://github.com/{REPO}/releases/download/{tag}/MacSnap.app.zip",
+            "Latest-release archive URL disagreement")
     merged = apply_withdrawals(merge_feed(candidate, live))
     if max(offered) not in withdrawn_builds():
         hydrate_downloads(args.site, latest, receipt)

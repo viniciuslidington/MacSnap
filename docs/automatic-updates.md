@@ -94,3 +94,8 @@ Use `python3 scripts/update-distribution.py --help` for candidate assembly/verif
 Do not replace bytes behind a version already offered to clients. To withdraw a faulty offer, add its integer build to `site/updates/withdrawn-builds.json` through a reviewed change and deploy Pages. Keep that build in the list permanently: hydration removes listed offers even when a release asset or cached feed still includes them. If every offer is withdrawn, a valid empty feed is deployed. A failed deployment leaves the existing feed in place, so verify the deployed feed before declaring the withdrawal complete.
 
 Publish a corrected version with a build higher than every withdrawn build. Preparation and promotion enforce this floor, preventing reuse of an affected build. Removing an offer prevents future offers; it does not undo installed updates or guarantee cancellation of an update already downloaded by a client. Editing only the checked-in empty appcast baseline is ineffective because hydration restores approved offers.
+
+
+## Revisions retaining a display version
+
+A published archive is immutable even when a release has not been announced. To revise display version 1.0.11, build 12 uses tag `v1.0.11-build.12`; the original `v1.0.11` assets and build 11 remain available. Revision tags bind the display version and the exact internal build. Sparkle compares the increasing build number, so existing 1.0.11/build 11 installations can receive the revision. Candidate preparation, publication, appcast hydration and DMG links all retain the tag-specific URLs; published bytes are never overwritten.

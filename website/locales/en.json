@@ -91,20 +91,20 @@
     "editor_at_the_top_browser_in_the_middle_reference_at_the": "Editor at the top, browser in the middle, reference at the bottom. Choose a position for each window and keep all three in view, stacked one above the other.",
     "some_apps_enforce_minimum_window_sizes_which_can_limit_t": "Some apps enforce minimum window sizes, which can limit the layouts they fit into.",
     "ready_to_try_it": "READY TO TRY IT?",
-    "a_small_app": "A small app.",
-    "a_little_more_room": "A little more room.",
+    "a_small_app": "Install MacSnap.",
+    "a_little_more_room": "Know what to expect.",
     "move_it_to_applications": "Move it to Applications.",
     "allow_accessibility_access": "Allow Accessibility access.",
-    "in_system_settings_privacy_security_accessibility_allow_": "In System Settings → Privacy & Security → Accessibility, allow MacSnap to arrange your windows.",
-    "independently_distributed": "Independently distributed.",
-    "the_current_release_is_ad_hoc_signed_and_isn_t_notarized": "The current release is ad-hoc signed and isn't notarized by Apple. macOS may show a warning when you open it. Read",
+    "in_system_settings_privacy_security_accessibility_allow_": "In System Settings → Privacy & Security → Accessibility, enable MacSnap so it can move and resize windows. This is a separate permission, required with either installation method.",
+    "independently_distributed": "Why does macOS show this warning?",
+    "the_current_release_is_ad_hoc_signed_and_isn_t_notarized": "MacSnap is currently ad-hoc signed, without a Developer ID certificate or Apple notarization. This warning means Apple could not verify the app; it does not, by itself, mean malware was detected.",
     "apple_s_official_guidance": "Apple's official guidance",
     "and_only_open_apps_from_sources_you_trust": "and only open apps from sources you trust.",
     "download_didn_t_start": "Download didn't start?",
     "visit_the_release_page": "Visit the release page",
-    "prefer_the_terminal": "Prefer the Terminal?",
-    "get_the_installation_command": "Get the installation command.",
-    "the_installer_downloads_the_app_sets_up_launch_at_login_": "The installer downloads the app, sets up launch at login and opens Accessibility settings. You can",
+    "prefer_the_terminal": "02 / Terminal — for experienced users",
+    "get_the_installation_command": "Review the script, then copy the command.",
+    "the_installer_downloads_the_app_sets_up_launch_at_login_": "This command downloads and runs our installer. It installs the latest release in Applications, configures launch at login and opens Accessibility settings. If no release can be downloaded, it attempts to build from source. Before running it,",
     "read_the_script_before_running_it": "read the script before running it",
     "copy_command": "Copy command",
     "small_by_design_open_by_choice": "SMALL BY DESIGN. OPEN BY CHOICE.",
@@ -146,7 +146,29 @@
     "a_project_by": "A project by",
     "vinicius_lidington": "Vinicius Lidington",
     "project_links": "Project links",
-    "releases": "Releases"
+    "releases": "Releases",
+    "install_intro": "Choose the download or the Terminal. Both install the same app, and both need your permission to manage windows.",
+    "install_route_label": "01 / DOWNLOAD — RECOMMENDED",
+    "open_anyway_title": "Review the macOS warning.",
+    "open_anyway_body": "If macOS says it cannot verify MacSnap, click Done. In System Settings → Privacy & Security, scroll to Security, choose Open Anyway for MacSnap, then confirm Open. Do this only if you trust the download source.",
+    "warning_alt": "macOS warning: Apple could not verify that MacSnap.app is free of malware. Buttons: Move to Trash and Done.",
+    "warning_caption": "An example of the warning you may see on first launch. Wording varies with macOS.",
+    "notarization_cost": "Apple’s standard Developer Program membership costs US$99 per year, with regional pricing. This independent project currently uses distribution without that membership. MacSnap remains free and open source.",
+    "apple_program_link": "See Apple’s membership details",
+    "trust_explanation": "Open source means you can inspect the code, not that Apple has reviewed it or that it is guaranteed safe. Check the release source before allowing the app.",
+    "review_source": "View the source code",
+    "after_install": "After installation, look for MacSnap in the menu bar. If snapping stops after an update, remove the old MacSnap entry in Accessibility and add /Applications/MacSnap.app again.",
+    "terminal_permissions": "Downloads through curl may not receive the same quarantine marking as browser downloads, so the first-launch warning can differ. This is not notarization or a guarantee of warning-free installation. Accessibility permission is still required; the installer does not disable Gatekeeper or remove quarantine attributes.",
+    "native_tiling_title": "Let MacSnap handle window snapping.",
+    "native_tiling_intro": "On macOS Sequoia 15 and later, turn off the overlapping native tiling gestures before using MacSnap. Open System Settings → Desktop & Dock → Windows and disable:",
+    "native_tiling_edges": "Drag windows to left or right edge of screen to tile.",
+    "native_tiling_menubar": "Drag windows to menu bar to fill screen.",
+    "native_tiling_option": "Hold the Option key while dragging windows to tile.",
+    "native_tiling_footer": "This keeps macOS and MacSnap from responding to the same drag. Names vary by macOS version; on older versions without these options, skip this step. Apply this setup with either installation method.",
+    "native_tiling_url": "https://support.apple.com/en-us/guide/mac-help/mchl118087b0/mac",
+    "native_tiling_link": "Apple’s window tiling guide",
+    "native_tiling_image_alt": "macOS window tiling settings in English, with the edge, menu bar, Option-drag and tiled-window margin switches turned off.",
+    "native_tiling_image_caption": "Visual reference: turn off the first three options listed above. Labels may vary with your macOS version."
   },
   "ui": {
     "copySuccess": "Command copied. You can review the installer before running it.",
@@ -161,12 +183,14 @@
     "zip": {
       "first_title": "Download and unzip.",
       "first_body": "Download the release ZIP and extract MacSnap.app.",
-      "second_body": "Move the app to your Applications folder and open MacSnap. You'll find it in the menu bar."
+      "second_body": "Move the app to your Applications folder and open MacSnap. You'll find it in the menu bar.",
+      "download_label": "Download ZIP"
     },
     "dmg": {
       "first_title": "Download and open.",
       "first_body": "Download MacSnap.dmg and double-click it to open the installer.",
-      "second_body": "Drag MacSnap to the Applications shortcut in the installer. Open it from Applications, then eject the disk image. You'll find MacSnap in the menu bar."
+      "second_body": "Drag MacSnap to the Applications shortcut in the installer. Open it from Applications, then eject the disk image. You'll find MacSnap in the menu bar.",
+      "download_label": "Download DMG"
     }
   }
 }
