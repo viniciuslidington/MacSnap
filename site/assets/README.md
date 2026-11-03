@@ -1,15 +1,17 @@
 # Landing page asset provenance
 
-Generated on 2026-10-29. The PNGs are native AppKit **source renders**, not a screen recording or a capture of a user's desktop.
+Initial assets generated on 2026-10-29; the menu render was refreshed on 2026-11-02 for MacSnap 1.0.11/build 12. The PNGs are native AppKit **source renders**, not a screen recording or a capture of a user's desktop.
 
 | Asset | Dimensions | Source |
 | --- | --- | --- |
 | `icon.png` | 256 × 256 px | Existing `Resources/AppIcon.icns`, exported with `sips` |
 | `icon-128.png` | 128 × 128 px | Same original icon |
-| `menu-native.png` | 620 × 808 px | Production `MenuHeaderView`, `QuickSnapSectionView`, `ControllersSectionView`, and `MenuFooterSectionView` |
+| `menu-native.png` | 620 × 874 px | Production `MenuHeaderView`, `QuickSnapSectionView`, `ControllersSectionView`, and `MenuFooterSectionView` |
 | `layouts-native.png` | 1360 × 188 px | Production `SnapLayoutBarView` in expanded landscape mode, with its first slot hovered programmatically |
 | `social-preview.png` | 1200 × 630 px | English browser-rendered editorial composition using the original icon, the native menu render and the self-hosted fonts below |
 | `social-preview-pt.png` | 1200 × 630 px | Original Portuguese version of the same editorial composition |
+
+Run `python3 scripts/render-site-menu.py` on macOS to regenerate `menu-native.png` from the current production sections and version metadata. The Option accelerator is shown off, matching its default; other enabled states are illustrative.
 
 The native views were compiled from this checkout with Swift 6 into a temporary render harness outside the repository. The harness appended an entry point to a temporary copy of `MenuBarController.swift` to access its private section views, and otherwise compiled the unchanged production sources (excluding the app's normal `main.swift`). It created offscreen AppKit windows, used the Aqua appearance and `NSView.cacheDisplay` at 2× resolution, and wrote PNGs. No window was shown, no event monitor was started, no Accessibility prompt was requested, no user windows were moved, and no preferences were changed.
 
@@ -18,7 +20,7 @@ The menu image is a composition of the actual section views on a neutral backgro
 Source SHA-256 at generation:
 
 ```text
-b8de5f2c12c061059cd458e3816003ebc34b9798fad086103b34a6bcd6646284  Sources/MacSnap/Features/UI/MenuBarController.swift
+d9b245cc65150b03eec4771903faf153ccff5615259a84b1820d2358b32360a9  Sources/MacSnap/Features/UI/MenuBarController.swift
 785eeb3efecbf5db051346567d921ceb081c1f74e8e4c8feb76d7cf317e1a831  Sources/MacSnap/Features/UI/SnapLayoutBarWindow.swift
 d7262af1b03ea374c4d732c78b1f587e10b931886afa91242c4a512885b241cd  Resources/AppIcon.icns
 ```
